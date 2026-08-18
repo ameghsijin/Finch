@@ -51,7 +51,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'app',
-    'django_ai_lens',  # NEW: Add AI lens for Gemini queries
+    # 'django_ai_lens',
     # Remove django_otp since we're using email-based 2FA
     # 'django_otp',
     # 'django_otp.plugins.otp_totp',
