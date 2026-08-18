@@ -23,20 +23,9 @@ billiard==4.2.0
 amqp==5.2.0
 vine==5.1.0
 
-# AI & Gemini
-google-generativeai==0.7.2
-google-api-core==2.19.2
-google-api-python-client==2.149.0
-google-auth==2.35.0
-google-auth-httplib2==0.1.1
-googleapis-common-protos==1.63.2
-proto-plus==1.24.0
-protobuf==4.25.3
-grpcio==1.68.1
-grpcio-status==1.68.1
-
-# Groq
+# AI - Groq
 groq>=1.5.0,<1.7.0
+
 
 # HTTP & Requests
 requests==2.32.3
