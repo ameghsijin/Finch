@@ -15,12 +15,12 @@
     <div class="logo">Spend<span>Wise</span></div>
 
     <nav class="nav-links">
-      <a href="/">Dashboard</a>
-      <a href="/expenses/">Expenses</a>
-      <a href="/income/">Income</a>
-      <a href="/budget/" class="active">Budgets</a>
-      <a href="/categories/">Categories</a>
-      <a href="/reports/">Reports</a>
+      <a href="{% url 'index' %}">Dashboard</a>
+      <a href="{% url 'expenses' %}">Expenses</a>
+      <a href="{% url 'income' %}">Income</a>
+      <a href="{% url 'budgets' %}" class="active">Budgets</a>
+      <a href="{% url 'categories' %}">Categories</a>
+      <a href="{% url 'reports' %}">Reports</a>
     </nav>
 
     <div class="sidebar-user">
@@ -31,19 +31,24 @@
 
   <main class="main">
 
+    <!-- Messages -->
+    {% if messages %}
+      {% for message in messages %}
+        <div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+
     <div class="page-header">
       <div>
-        <h1>Budgets</h1>
-        <p>Set limits and track progress</p>
+        <h1>📊 Budgets</h1>
+        <p>Set limits and track your spending progress</p>
       </div>
-
       <a href="{% url 'budget_form' %}" class="btn btn-primary">
-        + Set budget
+        ➕ Set Budget
       </a>
     </div>
 
     <div class="panel">
-
       <div class="table-wrap">
         <table>
           <thead>
@@ -53,23 +58,16 @@
               <th>Budget</th>
               <th>Spent</th>
               <th>Progress</th>
-              <th></th>
+              <th>Actions</th>
             </tr>
           </thead>
-
           <tbody>
-
             {% for row in budget_rows %}
             <tr>
-
               <!-- Category -->
               <td>
                 <span class="badge">
-                  <span
-                    class="badge-dot"
-                    style="background:{{ row.budget.category.color }}">
-                  </span>
-
+                  <span class="badge-dot" style="background:{{ row.budget.category.color }}"></span>
                   {{ row.budget.category.name }}
                 </span>
               </td>
@@ -78,92 +76,78 @@
               <td>
                 {% if row.budget.period == 'monthly' %}
                   {{ row.budget.month }}/{{ row.budget.year }}
-                  <div style="color:var(--ink-muted);font-size:.8rem">
-                    Monthly
-                  </div>
+                  <div style="color:var(--ink-muted);font-size:.8rem">Monthly</div>
                 {% else %}
                   {{ row.budget.year }}
-                  <div style="color:var(--ink-muted);font-size:.8rem">
-                    Yearly
-                  </div>
+                  <div style="color:var(--ink-muted);font-size:.8rem">Yearly</div>
                 {% endif %}
               </td>
 
               <!-- Budget -->
-              <td>
-                ₹{{ row.budget.amount }}
-              </td>
+              <td>₹{{ row.budget.amount|floatformat:2 }}</td>
 
               <!-- Spent -->
               <td class="amount{% if row.status == 'danger' %} expense{% endif %}">
-                ₹{{ row.spent }}
+                ₹{{ row.spent|floatformat:2 }}
               </td>
 
               <!-- Progress -->
               <td style="min-width:180px">
-
                 <div class="budget-meta" style="margin-bottom:.35rem">
                   <span>{{ row.percent }}%</span>
-
                   {% if row.remaining >= 0 %}
-                    <span>₹{{ row.remaining }} left</span>
+                    <span style="color:var(--success);">₹{{ row.remaining|floatformat:2 }} left</span>
                   {% else %}
-                    <span>₹{{ row.remaining|stringformat:"s"|slice:"1:" }} over</span>
+                    <span style="color:var(--danger);">₹{{ row.remaining|floatformat:2 }} over</span>
                   {% endif %}
                 </div>
-
                 <div class="progress{% if row.status %} {{ row.status }}{% endif %}">
                   <span style="width:{{ row.bar_width }}%"></span>
                 </div>
-
               </td>
 
               <!-- Actions -->
               <td class="actions">
-
-                <a
-                  href="{% url 'budget_edit' row.budget.pk %}"
-                  class="btn btn-ghost btn-sm">
-                  Edit
-                </a>
-
-                <form
-                  method="post"
-                  action="{% url 'budget_delete' row.budget.pk %}"
-                  style="display:inline">
-
+                <a href="{% url 'budget_edit' row.budget.pk %}" class="btn btn-ghost btn-sm">Edit</a>
+                <form method="post" action="{% url 'budget_delete' row.budget.pk %}" style="display:inline"
+                      onsubmit="return confirm('Delete this budget?');">
                   {% csrf_token %}
-
-                  <button
-                    type="submit"
-                    class="btn btn-danger btn-sm"
-                    onclick="return confirm('Delete this budget?');">
-                    Delete
-                  </button>
-
+                  <button type="submit" class="btn btn-danger btn-sm">Delete</button>
                 </form>
-
               </td>
-
             </tr>
-
             {% empty %}
-
             <tr>
-              <td
-                colspan="6"
-                style="color:var(--ink-muted);text-align:center;padding:2rem">
-                No budgets found.
+              <td colspan="6" style="color:var(--ink-muted);text-align:center;padding:2rem;">
+                No budgets set yet. <a href="{% url 'budget_form' %}">Set one</a> to start tracking your spending.
               </td>
             </tr>
-
             {% endfor %}
-
           </tbody>
         </table>
       </div>
-
     </div>
+
+    <!-- Pagination -->
+    {% if page_obj.has_other_pages %}
+    <div class="pagination" style="display:flex;justify-content:center;gap:0.5rem;padding:1rem 0;">
+      <span class="step-links">
+        {% if page_obj.has_previous %}
+          <a href="?page=1" class="btn btn-sm btn-secondary">&laquo; First</a>
+          <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-sm btn-secondary">Previous</a>
+        {% endif %}
+
+        <span class="current" style="padding:0 1rem;display:inline-flex;align-items:center;">
+          Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+        </span>
+
+        {% if page_obj.has_next %}
+          <a href="?page={{ page_obj.next_page_number }}" class="btn btn-sm btn-secondary">Next</a>
+          <a href="?page={{ page_obj.paginator.num_pages }}" class="btn btn-sm btn-secondary">Last &raquo;</a>
+        {% endif %}
+      </span>
+    </div>
+    {% endif %}
 
   </main>
 </div>

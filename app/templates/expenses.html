@@ -1,122 +1,151 @@
 {% extends "base.html" %}
 {% load static %}
+
 {% block title %}Expenses · SpendWise{% endblock %}
 
 {% block content %}
-    <div class="page-header">
-      <div>
-        <h1>Expenses</h1>
-        <p>Total shown: <strong>₹{{ total }}</strong></p>
-      </div>
-      <div style="display:flex;gap:.5rem;flex-wrap:wrap">
-        <a href="{% url 'expenses_export' %}?{{ request.GET.urlencode }}" class="btn btn-secondary">Download Excel</a>
-        <a href="{% url 'expense_form' %}" class="btn btn-primary">+ Add expense</a>
-      </div>
-    </div>
+<div class="page-header">
+  <div>
+    <h1>💰 Expenses</h1>
+    <p>Total: <strong>₹{{ total|floatformat:2 }}</strong></p>
+  </div>
+  <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+    <a href="{% url 'expenses_export' %}?{{ request.GET.urlencode }}" class="btn btn-secondary">
+      📥 Export CSV
+    </a>
+    <a href="{% url 'expense_form' %}" class="btn btn-primary">
+      ➕ Add Expense
+    </a>
+  </div>
+</div>
 
-    {% if messages %}
-      {% for message in messages %}
-        <div class="alert alert-warning">{{ message }}</div>
+<!-- Messages -->
+{% if messages %}
+  {% for message in messages %}
+    <div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>
+  {% endfor %}
+{% endif %}
+
+<!-- Filters -->
+<form class="filter-bar panel js-filter-form" method="get" action="{% url 'expenses' %}"
+      style="grid-template-columns:2fr 1.2fr 1.2fr 1fr 1fr auto auto">
+  <div class="form-group" style="margin:0">
+    <label for="q">🔍 Search</label>
+    <input class="form-control js-debounce-search" type="search" id="q" name="q" 
+           value="{{ q }}" placeholder="Title or notes" autocomplete="off">
+  </div>
+  <div class="form-group" style="margin:0">
+    <label for="category">Category</label>
+    <select class="form-control" id="category" name="category">
+      <option value="">All</option>
+      {% for cat in categories %}
+      <option value="{{ cat.pk }}" {% if selected_category == cat.pk %}selected{% endif %}>
+        {{ cat.name }}
+      </option>
       {% endfor %}
+    </select>
+  </div>
+  <div class="form-group" style="margin:0">
+    <label for="payment">Payment</label>
+    <select class="form-control" id="payment" name="payment">
+      <option value="">All</option>
+      {% for value, label in payment_choices %}
+      <option value="{{ value }}" {% if selected_payment == value %}selected{% endif %}>
+        {{ label }}
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="form-group" style="margin:0">
+    <label for="from">From</label>
+    <input class="form-control" type="date" id="from" name="from" value="{{ date_from }}">
+  </div>
+  <div class="form-group" style="margin:0">
+    <label for="to">To</label>
+    <input class="form-control" type="date" id="to" name="to" value="{{ date_to }}">
+  </div>
+  <button type="submit" class="btn btn-secondary">Apply</button>
+  {% if filters_active %}
+  <a href="{% url 'expenses' %}" class="btn btn-ghost">Clear</a>
+  {% endif %}
+</form>
+
+<!-- Expenses Table -->
+<div class="panel">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Title</th>
+          <th>Category</th>
+          <th>Date</th>
+          <th>Payment</th>
+          <th>Amount</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for expense in page_obj %}
+        <tr>
+          <td><strong>{{ expense.title }}</strong></td>
+          <td>
+            {% if expense.category %}
+            <span class="badge">
+              <span class="badge-dot" style="background:{{ expense.category.color }}"></span>
+              {{ expense.category.name }}
+            </span>
+            {% else %}
+            —
+            {% endif %}
+          </td>
+          <td>{{ expense.date|date:"M d, Y" }}</td>
+          <td>{{ expense.get_payment_method_display }}</td>
+          <td class="amount expense">₹{{ expense.amount|floatformat:2 }}</td>
+          <td class="actions">
+            <a href="{% url 'expense_edit' expense.pk %}" class="btn btn-ghost btn-sm">Edit</a>
+            <form method="post" action="{% url 'expense_delete' expense.pk %}" style="display:inline"
+                  onsubmit="return confirm('Delete this expense?');">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" style="color:var(--ink-muted);text-align:center;padding:2rem;">
+            {% if filters_active %}
+              No expenses match your filters.
+            {% else %}
+              No expenses yet. <a href="{% url 'expense_form' %}">Add one</a> to get started.
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Pagination -->
+{% if page_obj.has_other_pages %}
+<div class="pagination" style="display:flex;justify-content:center;gap:0.5rem;padding:1rem 0;">
+  <span class="step-links">
+    {% if page_obj.has_previous %}
+      <a href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-sm btn-secondary">&laquo; First</a>
+      <a href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-sm btn-secondary">Previous</a>
     {% endif %}
 
-    <form class="filter-bar panel js-filter-form" method="get" action="{% url 'expenses' %}"
-          style="grid-template-columns:2fr 1.2fr 1.2fr 1fr 1fr auto auto">
-      <div class="form-group" style="margin:0">
-        <label for="q">Search</label>
-        <input class="form-control js-debounce-search" type="search" id="q" name="q" value="{{ q }}"
-               placeholder="Title or notes" autocomplete="off">
-      </div>
-      <div class="form-group" style="margin:0">
-        <label for="category">Category</label>
-        <select class="form-control" id="category" name="category">
-          <option value="">All categories</option>
-          {% for category in categories %}
-          <option value="{{ category.pk }}" {% if selected_category == category.pk %}selected{% endif %}>
-            {{ category.name }}
-          </option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="form-group" style="margin:0">
-        <label for="payment">Payment</label>
-        <select class="form-control" id="payment" name="payment">
-          <option value="">All methods</option>
-          {% for value, label in payment_choices %}
-          <option value="{{ value }}" {% if selected_payment == value %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="form-group" style="margin:0">
-        <label for="from">From</label>
-        <input class="form-control" type="date" id="from" name="from" value="{{ date_from }}">
-      </div>
-      <div class="form-group" style="margin:0">
-        <label for="to">To</label>
-        <input class="form-control" type="date" id="to" name="to" value="{{ date_to }}">
-      </div>
-      <button type="submit" class="btn btn-secondary">Apply</button>
-      {% if filters_active %}
-      <a href="{% url 'expenses' %}" class="btn btn-ghost">Clear</a>
-      {% endif %}
-    </form>
+    <span class="current" style="padding:0 1rem;display:inline-flex;align-items:center;">
+      Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+    </span>
 
-    <div class="panel">
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Title</th>
-              <th>Category</th>
-              <th>Date</th>
-              <th>Payment</th>
-              <th>Amount</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for expense in expenses %}
-            <tr>
-              <td><strong>{{ expense.title }}</strong></td>
-              <td>
-                {% if expense.category %}
-                <span class="badge">
-                  <span class="badge-dot" style="background:{{ expense.category.color }}"></span>
-                  {{ expense.category.name }}
-                </span>
-                {% else %}
-                —
-                {% endif %}
-              </td>
-              <td>{{ expense.date|date:"M d, Y" }}</td>
-              <td>{{ expense.payment_method }}</td>
-              <td class="amount expense">₹{{ expense.amount }}</td>
-              <td class="actions">
-                <a href="{% url 'expense_edit' expense.pk %}" class="btn btn-ghost btn-sm">Edit</a>
-                <form method="post" action="{% url 'expense_delete' expense.pk %}" style="display:inline"
-                      onsubmit="return confirm('Delete this expense?');">
-                  {% csrf_token %}
-                  <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                </form>
-              </td>
-            </tr>
-            {% empty %}
-            <tr>
-              <td colspan="6" style="color:var(--ink-muted)">
-                {% if filters_active %}
-                  No expenses match your filters.
-                {% else %}
-                  No expenses yet. Add one to get started.
-                {% endif %}
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    {% include 'pagination.html' %}
+    {% if page_obj.has_next %}
+      <a href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-sm btn-secondary">Next</a>
+      <a href="?page={{ page_obj.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-sm btn-secondary">Last &raquo;</a>
+    {% endif %}
+  </span>
+</div>
+{% endif %}
 
 {% endblock %}
 

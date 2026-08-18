@@ -6,413 +6,190 @@ from django.contrib import messages
 from django.views.decorators.http import require_POST
 from django.db.models import Sum, Q
 from django.utils import timezone
-from django.core.paginator import Paginator
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.http import JsonResponse, HttpResponse
+from django.core.mail import send_mail
+from django.conf import settings
 from decimal import Decimal
 import calendar
 import json
 import random
 import string
-from datetime import datetime, timedelta
+import csv
+from datetime import timedelta
 from .models import Category, Expense, Income, Budget
 from .forms import CategoryForm, ExpenseForm, IncomeForm, BudgetForm
-# from .exports import export_expenses, export_income, export_budgets
-from django.http import JsonResponse, HttpResponse
-import csv
-import io
-from celery.result import AsyncResult
 from .tasks import analyze_finances_async, generate_forecast
+from celery.result import AsyncResult
 
 # ============ 2FA STORAGE ============
-_2fa_codes = {}  
-
+_2fa_codes = {}
 
 def _generate_otp():
     """Generate a 6-digit OTP code"""
     return ''.join(random.choices(string.digits, k=6))
 
-
 def _send_2fa_email(user_email, otp_code):
-    """
-    Send OTP code via Zoho Mail
-    """
-    from django.core.mail import send_mail
-    from django.conf import settings
-    
-    subject = 'Your 2FA Verification Code - SpendWise'
-    
-    html_message = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <style>
-            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-            .header {{ background: #4F46E5; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }}
-            .code {{ font-size: 36px; font-weight: bold; color: #4F46E5; padding: 30px; text-align: center; letter-spacing: 8px; background: #f8f9fa; border-radius: 8px; margin: 20px 0; }}
-            .footer {{ margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666; text-align: center; }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <h2>🔐 SpendWise 2FA Verification</h2>
-            </div>
-            
-            <p>Hello,</p>
-            <p>You requested a verification code to log in to your SpendWise account.</p>
-            
-            <div class="code">{otp_code}</div>
-            
-            <p><strong>⚠️ This code will expire in 5 minutes.</strong></p>
-            <p>If you didn't request this code, please ignore this email.</p>
-            
-            <div class="footer">
-                <p>Best regards,<br><strong>SpendWise Team</strong></p>
-                <p><small>This is an automated message, please do not reply.</small></p>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
-    
-    plain_message = f"""
-SpendWise 2FA Verification
-
-Your verification code is: {otp_code}
-
-This code will expire in 5 minutes.
-
-If you didn't request this, please ignore this email.
-
-Best regards,
-SpendWise Team
-"""
-    
+    """Send OTP via email with fallback to console"""
     try:
         send_mail(
-            subject,
-            plain_message,
-            settings.DEFAULT_FROM_EMAIL,
-            [user_email],
+            subject='Your 2FA Verification Code - SpendWise',
+            message=f'Your verification code is: {otp_code}\nValid for 5 minutes.',
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user_email],
             fail_silently=False,
-            html_message=html_message,
+            html_message=f"""
+            <h2>🔐 SpendWise 2FA</h2>
+            <p>Your verification code:</p>
+            <h1 style="font-size:36px;letter-spacing:8px;background:#f0f0f0;padding:20px;text-align:center;">
+                {otp_code}
+            </h1>
+            <p>Valid for 5 minutes.</p>
+            """
         )
-        print(f"✅ 2FA email sent successfully to {user_email}")
         return True
     except Exception as e:
-        print(f"❌ Failed to send email to {user_email}: {e}")
-        # Fallback: print code to console
-        print(f"\n{'='*50}")
-        print(f"2FA CODE for {user_email}: {otp_code}")
-        print(f"{'='*50}\n")
+        print(f"📧 2FA Code for {user_email}: {otp_code}")
         return False
 
-# Add to views.py temporarily
-def test_email_template(request):
-    from django.template.loader import render_to_string
-    
-    try:
-        html = render_to_string('email/2fa_code.html', {'otp_code': '123456'})
-        return HttpResponse(html)
-    except Exception as e:
-        return HttpResponse(f"Error: {e}")
-
-
-def export_expenses(qs, username):
-    """Export expenses queryset to CSV response"""
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = f'attachment; filename="{username}_expenses.csv"'
-
-    writer = csv.writer(response)
-    writer.writerow(['ID', 'User', 'Title', 'Amount', 'Category', 'Date', 'Payment Method', 'Notes'])
-    for e in qs:
-        writer.writerow([
-            e.pk,
-            getattr(e.user, 'username', ''),
-            e.title,
-            f"{e.amount}",
-            e.category.name if e.category else '',
-            e.date.isoformat() if getattr(e, 'date', None) else '',
-            e.payment_method,
-            e.notes,
-        ])
-    return response
-
-
-def export_income(qs, username):
-    """Export incomes queryset to CSV response"""
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = f'attachment; filename="{username}_income.csv"'
-
-    writer = csv.writer(response)
-    writer.writerow(['ID', 'User', 'Title', 'Amount', 'Category', 'Date', 'Notes'])
-    for i in qs:
-        writer.writerow([
-            i.pk,
-            getattr(i.user, 'username', ''),
-            i.title,
-            f"{i.amount}",
-            i.category.name if i.category else '',
-            i.date.isoformat() if getattr(i, 'date', None) else '',
-            i.notes,
-        ])
-    return response
-
-
-def export_budgets(budget_rows, username):
-    """Export budgets (either queryset or prepared rows) to CSV"""
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = f'attachment; filename="{username}_budgets.csv"'
-
-    writer = csv.writer(response)
-    writer.writerow(['Category', 'Period', 'Year', 'Month', 'Amount', 'Spent', 'Remaining', 'Percent', 'Status'])
-
-    # budget_rows may be a queryset of Budget or a list of dicts from _budget_progress
-    if hasattr(budget_rows, 'select_related') or hasattr(budget_rows, 'filter'):
-        for b in budget_rows:
-            writer.writerow([
-                getattr(b.category, 'name', ''),
-                b.period,
-                b.year,
-                b.month or '',
-                f"{b.amount}",
-                '',
-                '',
-                '',
-                '',
-            ])
-    else:
-        for row in budget_rows:
-            b = row.get('budget') if isinstance(row, dict) else None
-            writer.writerow([
-                row.get('budget').category.name if b else row.get('category', ''),
-                row.get('budget').period if b else row.get('period', ''),
-                row.get('budget').year if b else row.get('year', ''),
-                row.get('budget').month if b else row.get('month', ''),
-                f"{row.get('budget').amount if b else row.get('amount', '')}",
-                f"{row.get('spent', '')}",
-                f"{row.get('remaining', '')}",
-                f"{row.get('percent', '')}",
-                row.get('status', ''),
-            ])
-
-    return response
-
-
 def _generate_and_send_otp(user):
-    """Generate OTP and send to user's email"""
-    otp_code = _generate_otp()
-    expiry = datetime.now() + timedelta(minutes=5)
-    
+    """Generate OTP and store with expiration"""
+    otp = _generate_otp()
     _2fa_codes[user.id] = {
-        'code': otp_code,
-        'expires': expiry,
+        'code': otp,
+        'expires': timezone.now() + timedelta(minutes=5),
         'email': user.email
     }
-    
-    # Send email
-    success = _send_2fa_email(user.email, otp_code)
-    
-    # For development, if email fails, we still return the code for testing
-    return otp_code
-
+    _send_2fa_email(user.email, otp)
+    return otp
 
 def _verify_otp(user_id, otp_code):
-    """Verify OTP code for user"""
+    """Verify OTP code"""
     if user_id not in _2fa_codes:
-        return False, "No OTP code found. Please request a new code."
+        return False, "No OTP found. Request a new code."
     
     stored = _2fa_codes[user_id]
-    
-    if datetime.now() > stored['expires']:
+    if timezone.now() > stored['expires']:
         del _2fa_codes[user_id]
-        return False, "OTP code has expired. Please request a new code."
+        return False, "OTP expired. Request a new code."
     
     if stored['code'] != otp_code:
-        return False, "Invalid OTP code. Please try again."
+        return False, "Invalid OTP. Try again."
     
-    # Clean up after successful verification
     del _2fa_codes[user_id]
-    return True, "OTP verified successfully."
+    return True, "Verified."
 
+# ============ HELPERS ============
 
-# ============ HELPER FUNCTIONS (Reusable) ============
-
-def _sum(qs):
-    """Sum amounts from queryset"""
+def _sum_amount(qs):
+    """Safe sum of amounts"""
     return qs.aggregate(total=Sum('amount'))['total'] or Decimal('0')
 
-
-def _budget_progress(budget):
-    """Calculate budget spending progress with status"""
+def _get_budget_progress(budget):
+    """Calculate budget progress"""
     qs = Expense.objects.filter(
-        user=budget.user, 
-        category=budget.category, 
+        user=budget.user,
+        category=budget.category,
         date__year=budget.year
     )
     if budget.period == 'monthly' and budget.month:
         qs = qs.filter(date__month=budget.month)
     
-    spent = _sum(qs)
+    spent = _sum_amount(qs)
     amount = budget.amount or Decimal('0')
     percent = float(spent / amount * 100) if amount else 0
-    
-    # Status: danger if over, warning if near limit
-    status = 'danger' if percent >= 100 else 'warning' if percent >= budget.alert_threshold else ''
     
     return {
         'budget': budget,
         'spent': spent,
         'remaining': amount - spent,
         'percent': round(percent),
+        'status': 'danger' if percent >= 100 else 'warning' if percent >= budget.alert_threshold else '',
         'bar_width': min(round(percent), 100),
-        'status': status,
     }
 
-
-def _category_rows(expenses):
+def _get_category_data(expenses):
     """Group expenses by category for charts"""
-    rows = expenses.values('category__name', 'category__color').annotate(
+    data = expenses.values('category__name', 'category__color').annotate(
         total=Sum('amount')
     ).order_by('-total')
     
     return [{
-        'name': row['category__name'] or 'Uncategorized',
-        'color': row['category__color'] or '#64748B',
-        'total': row['total'] or Decimal('0'),
-    } for row in rows]
+        'name': item['category__name'] or 'Uncategorized',
+        'color': item['category__color'] or '#64748B',
+        'total': item['total'] or Decimal('0'),
+    } for item in data]
 
-
-def _save_form(request, form, message, redirect_name, set_user=False):
-    """Handle form save with optional user assignment"""
-    if request.method == 'POST' and form.is_valid():
-        obj = form.save(commit=False)
-        if set_user:
-            obj.user = request.user
-        obj.save()
-        messages.success(request, message)
-        return redirect(redirect_name)
-    return None
-
-
-def _get_int(value):
+def _safe_int(value):
     """Safely convert to int"""
     try:
         return int(value) if value else None
     except (TypeError, ValueError):
         return None
 
-
-def _get_date(value):
-    """Safely parse date string"""
+def _safe_date(value):
+    """Safely parse date"""
     from datetime import datetime
     try:
         return datetime.strptime(value, '%Y-%m-%d').date() if value else None
     except (TypeError, ValueError):
         return None
 
-
-def _filters_active(*values):
-    """Check if any filter is active"""
-    return any(bool(v) for v in values)
-
-
 def _paginate(queryset, request, per_page=10):
-    """Paginate queryset with error handling"""
+    """Paginate with error handling"""
     paginator = Paginator(queryset, per_page)
-    page = request.GET.get('page')
+    page = request.GET.get('page', 1)
     try:
         return paginator.page(page)
-    except:
+    except (PageNotAnInteger, EmptyPage):
         return paginator.page(1)
 
-
-# ============ FILTER QUERYSETS ============
-
-def _expense_queryset(user, params):
-    """Build filtered expense queryset"""
-    qs = Expense.objects.select_related('category').filter(user=user)
-    
-    if params.get('q'):
-        qs = qs.filter(Q(title__icontains=params['q']) | Q(notes__icontains=params['q']))
-    if params.get('category'):
-        qs = qs.filter(category_id=params['category'])
-    if params.get('payment'):
-        qs = qs.filter(payment_method=params['payment'])
-    if params.get('from'):
-        qs = qs.filter(date__gte=params['from'])
-    if params.get('to'):
-        qs = qs.filter(date__lte=params['to'])
-    return qs
-
-
-def _income_queryset(user, params):
-    """Build filtered income queryset"""
-    qs = Income.objects.select_related('category').filter(user=user)
-    
-    if params.get('q'):
-        qs = qs.filter(Q(title__icontains=params['q']) | Q(notes__icontains=params['q']))
-    if params.get('category'):
-        qs = qs.filter(category_id=params['category'])
-    if params.get('from'):
-        qs = qs.filter(date__gte=params['from'])
-    if params.get('to'):
-        qs = qs.filter(date__lte=params['to'])
-    return qs
-
-
-def _budget_queryset(user, params):
-    """Build filtered budget queryset"""
-    qs = Budget.objects.select_related('category').filter(user=user)
-    
-    if params.get('q'):
-        qs = qs.filter(category__name__icontains=params['q'])
-    if params.get('category'):
-        qs = qs.filter(category_id=params['category'])
-    if params.get('period'):
-        qs = qs.filter(period=params['period'])
-    if params.get('year'):
-        qs = qs.filter(year=params['year'])
-    if params.get('month'):
-        qs = qs.filter(month=params['month'])
-    return qs
-
+def _export_csv(response, filename, headers, rows):
+    """Generic CSV export"""
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    writer = csv.writer(response)
+    writer.writerow(headers)
+    writer.writerows(rows)
+    return response
 
 # ============ VIEWS ============
 
-# ----- Dashboard (Home) -----
+# ----- Dashboard -----
 @login_required
 def index(request):
-    """Dashboard - shows summary, charts, and recent data"""
+    """Dashboard with summary and charts"""
     now = timezone.now()
+    user = request.user
     
-    # Get current month's income/expenses
-    month_income = Income.objects.filter(user=request.user, date__year=now.year, date__month=now.month)
-    month_expenses = Expense.objects.filter(user=request.user, date__year=now.year, date__month=now.month)
-    income_total = _sum(month_income)
-    expense_total = _sum(month_expenses)
+    # Monthly data
+    month_income = Income.objects.filter(user=user, date__year=now.year, date__month=now.month)
+    month_expenses = Expense.objects.filter(user=user, date__year=now.year, date__month=now.month)
     
-    # Budget progress (top 5)
+    income_total = _sum_amount(month_income)
+    expense_total = _sum_amount(month_expenses)
+    
+    # Budget progress
     budgets = Budget.objects.select_related('category').filter(
-        user=request.user, 
-        year=now.year
+        user=user, year=now.year
     ).filter(Q(period='yearly') | Q(period='monthly', month=now.month))[:5]
-    budget_rows = [_budget_progress(b) for b in budgets]
+    budget_rows = [_get_budget_progress(b) for b in budgets]
     
-    # Category breakdown for pie chart
-    category_rows = _category_rows(month_expenses)
+    # Category breakdown
+    category_rows = _get_category_data(month_expenses)
     
-    # 3-month trend for line chart
-    trend_labels, trend_income, trend_expenses = [], [], []
-    for offset in range(2, -1, -1):
-        month = now.month - offset
+    # 3-month trend
+    trend_data = []
+    for i in range(2, -1, -1):
+        month = now.month - i
         year = now.year
         if month <= 0:
             month += 12
             year -= 1
-        trend_labels.append(f'{calendar.month_abbr[month]} {year}')
-        trend_income.append(float(_sum(Income.objects.filter(user=request.user, date__year=year, date__month=month))))
-        trend_expenses.append(float(_sum(Expense.objects.filter(user=request.user, date__year=year, date__month=month))))
+        trend_data.append({
+            'label': f'{calendar.month_abbr[month]} {year}',
+            'income': float(_sum_amount(Income.objects.filter(user=user, date__year=year, date__month=month))),
+            'expense': float(_sum_amount(Expense.objects.filter(user=user, date__year=year, date__month=month))),
+        })
     
     return render(request, 'index.html', {
         'active_page': 'dashboard',
@@ -420,67 +197,81 @@ def index(request):
         'expense_total': expense_total,
         'balance': income_total - expense_total,
         'budget_rows': budget_rows,
-        'budget_alerts': [row for row in budget_rows if row['status']],
-        # Chart data (JSON serialized)
+        'budget_alerts': [r for r in budget_rows if r['status']],
         'cat_labels': json.dumps([r['name'] for r in category_rows]),
         'cat_values': json.dumps([float(r['total']) for r in category_rows]),
         'cat_colors': json.dumps([r['color'] for r in category_rows]),
-        'trend_labels': json.dumps(trend_labels),
-        'trend_income': json.dumps(trend_income),
-        'trend_expenses': json.dumps(trend_expenses),
+        'trend_labels': json.dumps([d['label'] for d in trend_data]),
+        'trend_income': json.dumps([d['income'] for d in trend_data]),
+        'trend_expenses': json.dumps([d['expense'] for d in trend_data]),
+        'recent_expenses': Expense.objects.filter(user=user).select_related('category')[:5],
+        'transaction_count': month_income.count() + month_expenses.count(),
     })
 
-
-# ----- Expenses CRUD -----
+# ----- Expenses -----
 @login_required
 def expenses(request):
-    """List expenses with filters and pagination"""
-    params = {
-        'q': request.GET.get('q', '').strip(),
-        'category': _get_int(request.GET.get('category')),
-        'payment': request.GET.get('payment', '').strip(),
-        'from': _get_date(request.GET.get('from', '').strip()),
-        'to': _get_date(request.GET.get('to', '').strip()),
-    }
+    """List expenses with filters"""
+    user = request.user
     
-    expense_list = _expense_queryset(request.user, params)
+    # Build filter params
+    q = request.GET.get('q', '').strip()
+    category = _safe_int(request.GET.get('category'))
+    payment = request.GET.get('payment', '').strip()
+    date_from = _safe_date(request.GET.get('from', '').strip())
+    date_to = _safe_date(request.GET.get('to', '').strip())
     
-    # ✅ CHANGE THIS: Use Paginator directly instead of _paginate
-    paginator = Paginator(expense_list, 10)  # 10 per page
-    page = request.GET.get('page')
-    try:
-        expenses_page = paginator.page(page)
-    except:
-        expenses_page = paginator.page(1)
+    # Filter queryset
+    qs = Expense.objects.select_related('category').filter(user=user)
+    if q:
+        qs = qs.filter(Q(title__icontains=q) | Q(notes__icontains=q))
+    if category:
+        qs = qs.filter(category_id=category)
+    if payment:
+        qs = qs.filter(payment_method=payment)
+    if date_from:
+        qs = qs.filter(date__gte=date_from)
+    if date_to:
+        qs = qs.filter(date__lte=date_to)
+    
+    # Paginate
+    page_obj = _paginate(qs, request)
     
     return render(request, 'expenses.html', {
         'active_page': 'expenses',
-        'expenses': expenses_page,        # ← Paginated objects
-        'paginator': paginator,           # ← ADD THIS (for template)
-        'total': _sum(expense_list),
+        'page_obj': page_obj,
+        'total': _sum_amount(qs),
         'categories': Category.objects.filter(type='expense'),
         'payment_choices': Expense.PAYMENT_CHOICES,
-        'q': params['q'],
-        'selected_category': params['category'],
-        'selected_payment': params['payment'],
-        'date_from': params['from'].isoformat() if params['from'] else '',
-        'date_to': params['to'].isoformat() if params['to'] else '',
-        'filters_active': _filters_active(*params.values()),
+        'q': q,
+        'selected_category': category,
+        'selected_payment': payment,
+        'date_from': date_from.isoformat() if date_from else '',
+        'date_to': date_to.isoformat() if date_to else '',
+        'filters_active': any([q, category, payment, date_from, date_to]),
     })
-
 
 @login_required
 def expense_form(request, pk=None):
     """Create or edit expense"""
     expense = get_object_or_404(Expense, pk=pk, user=request.user) if pk else None
-    form = ExpenseForm(request.POST or None, instance=expense)
-    return _save_form(request, form, 'Expense saved.', 'expenses', set_user=True) or render(request, 'expense-form.html', {
+    
+    if request.method == 'POST':
+        form = ExpenseForm(request.POST, instance=expense)
+        if form.is_valid():
+            obj = form.save(commit=False)
+            obj.user = request.user
+            obj.save()
+            messages.success(request, 'Expense saved successfully.')
+            return redirect('expenses')
+    else:
+        form = ExpenseForm(instance=expense)
+    
+    return render(request, 'expense-form.html', {
         'active_page': 'expenses',
         'expense': expense,
-        'categories': form.fields['category'].queryset,
-        'payment_choices': Expense.PAYMENT_CHOICES,
+        'form': form,
     })
-
 
 @login_required
 @require_POST
@@ -490,66 +281,95 @@ def expense_delete(request, pk):
     messages.success(request, 'Expense deleted.')
     return redirect('expenses')
 
-
 @login_required
 def expenses_export(request):
-    """Export filtered expenses to CSV"""
-    params = {
-        'q': request.GET.get('q', '').strip(),
-        'category': _get_int(request.GET.get('category')),
-        'payment': request.GET.get('payment', '').strip(),
-        'from': _get_date(request.GET.get('from', '').strip()),
-        'to': _get_date(request.GET.get('to', '').strip()),
-    }
-    return export_expenses(_expense_queryset(request.user, params), request.user.username)
+    """Export expenses to CSV"""
+    qs = Expense.objects.select_related('category').filter(user=request.user)
+    
+    # Apply same filters as list view
+    if q := request.GET.get('q', '').strip():
+        qs = qs.filter(Q(title__icontains=q) | Q(notes__icontains=q))
+    if category := _safe_int(request.GET.get('category')):
+        qs = qs.filter(category_id=category)
+    if payment := request.GET.get('payment', '').strip():
+        qs = qs.filter(payment_method=payment)
+    if date_from := _safe_date(request.GET.get('from', '').strip()):
+        qs = qs.filter(date__gte=date_from)
+    if date_to := _safe_date(request.GET.get('to', '').strip()):
+        qs = qs.filter(date__lte=date_to)
+    
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="{request.user.username}_expenses.csv"'
+    
+    writer = csv.writer(response)
+    writer.writerow(['Title', 'Category', 'Amount', 'Date', 'Payment Method', 'Notes'])
+    for e in qs:
+        writer.writerow([
+            e.title,
+            e.category.name if e.category else '',
+            e.amount,
+            e.date,
+            e.get_payment_method_display(),
+            e.notes or '',
+        ])
+    return response
 
-
-# ----- Income CRUD -----
+# ----- Income -----
 @login_required
 def income(request):
-    """List income with filters and pagination"""
-    params = {
-        'q': request.GET.get('q', '').strip(),
-        'category': _get_int(request.GET.get('category')),
-        'from': _get_date(request.GET.get('from', '').strip()),
-        'to': _get_date(request.GET.get('to', '').strip()),
-    }
+    """List income with filters"""
+    user = request.user
     
-    income_list = _income_queryset(request.user, params)
+    q = request.GET.get('q', '').strip()
+    category = _safe_int(request.GET.get('category'))
+    date_from = _safe_date(request.GET.get('from', '').strip())
+    date_to = _safe_date(request.GET.get('to', '').strip())
     
-    # ✅ Add paginator
-    paginator = Paginator(income_list, 10)
-    page = request.GET.get('page')
-    try:
-        incomes_page = paginator.page(page)
-    except:
-        incomes_page = paginator.page(1)
+    qs = Income.objects.select_related('category').filter(user=user)
+    if q:
+        qs = qs.filter(Q(title__icontains=q) | Q(notes__icontains=q))
+    if category:
+        qs = qs.filter(category_id=category)
+    if date_from:
+        qs = qs.filter(date__gte=date_from)
+    if date_to:
+        qs = qs.filter(date__lte=date_to)
+    
+    page_obj = _paginate(qs, request)
     
     return render(request, 'income.html', {
         'active_page': 'income',
-        'incomes': incomes_page,          # ← Paginated objects
-        'paginator': paginator,           # ← ADD THIS
-        'total': _sum(income_list),
+        'page_obj': page_obj,
+        'total': _sum_amount(qs),
         'categories': Category.objects.filter(type='income'),
-        'q': params['q'],
-        'selected_category': params['category'],
-        'date_from': params['from'].isoformat() if params['from'] else '',
-        'date_to': params['to'].isoformat() if params['to'] else '',
-        'filters_active': _filters_active(*params.values()),
+        'q': q,
+        'selected_category': category,
+        'date_from': date_from.isoformat() if date_from else '',
+        'date_to': date_to.isoformat() if date_to else '',
+        'filters_active': any([q, category, date_from, date_to]),
     })
-
 
 @login_required
 def income_form(request, pk=None):
     """Create or edit income"""
-    income = get_object_or_404(Income, pk=pk, user=request.user) if pk else None
-    form = IncomeForm(request.POST or None, instance=income)
-    return _save_form(request, form, 'Income saved.', 'income', set_user=True) or render(request, 'income-form.html', {
+    income_obj = get_object_or_404(Income, pk=pk, user=request.user) if pk else None
+    
+    if request.method == 'POST':
+        form = IncomeForm(request.POST, instance=income_obj)
+        if form.is_valid():
+            obj = form.save(commit=False)
+            obj.user = request.user
+            obj.save()
+            messages.success(request, 'Income saved successfully.')
+            return redirect('income')
+    else:
+        form = IncomeForm(instance=income_obj)
+    
+    return render(request, 'income-form.html', {
         'active_page': 'income',
-        'income': income,
-        'categories': form.fields['category'].queryset,
+        'income': income_obj,
+        'form': form,
     })
-
 
 @login_required
 @require_POST
@@ -559,57 +379,53 @@ def income_delete(request, pk):
     messages.success(request, 'Income deleted.')
     return redirect('income')
 
-
 @login_required
 def income_export(request):
-    """Export filtered income to CSV"""
-    params = {
-        'q': request.GET.get('q', '').strip(),
-        'category': _get_int(request.GET.get('category')),
-        'from': _get_date(request.GET.get('from', '').strip()),
-        'to': _get_date(request.GET.get('to', '').strip()),
-    }
-    return export_income(_income_queryset(request.user, params), request.user.username)
+    """Export income to CSV"""
+    qs = Income.objects.select_related('category').filter(user=request.user)
+    
+    if q := request.GET.get('q', '').strip():
+        qs = qs.filter(Q(title__icontains=q) | Q(notes__icontains=q))
+    if category := _safe_int(request.GET.get('category')):
+        qs = qs.filter(category_id=category)
+    if date_from := _safe_date(request.GET.get('from', '').strip()):
+        qs = qs.filter(date__gte=date_from)
+    if date_to := _safe_date(request.GET.get('to', '').strip()):
+        qs = qs.filter(date__lte=date_to)
+    
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="{request.user.username}_income.csv"'
+    
+    writer = csv.writer(response)
+    writer.writerow(['Title', 'Category', 'Amount', 'Date', 'Notes'])
+    for i in qs:
+        writer.writerow([
+            i.title,
+            i.category.name if i.category else '',
+            i.amount,
+            i.date,
+            i.notes or '',
+        ])
+    return response
 
-
-# ----- Budgets CRUD -----
+# ----- Budgets -----
 @login_required
 def budgets(request):
-    """List budgets with progress and pagination"""
-    params = {
-        'q': request.GET.get('q', '').strip(),
-        'category': _get_int(request.GET.get('category')),
-        'period': request.GET.get('period', '').strip(),
-        'year': _get_int(request.GET.get('year')),
-        'month': _get_int(request.GET.get('month')),
-    }
+    """List budgets with progress"""
+    user = request.user
     
-    budget_qs = _budget_queryset(request.user, params)
-    budgets_page = _paginate(budget_qs, request)
-    budget_rows = [_budget_progress(b) for b in budgets_page]
+    # Get all budgets for the user
+    qs = Budget.objects.select_related('category').filter(user=user)
     
-    # Get available years for filter dropdown
-    now = timezone.now()
-    years = sorted(
-        set(Budget.objects.filter(user=request.user).values_list('year', flat=True)) | {now.year},
-        reverse=True,
-    )
+    # Paginate
+    page_obj = _paginate(qs, request)
+    budget_rows = [_get_budget_progress(b) for b in page_obj]
     
     return render(request, 'budgets.html', {
         'active_page': 'budgets',
         'budget_rows': budget_rows,
-        'categories': Category.objects.filter(type='expense'),
-        'period_choices': Budget.PERIOD_CHOICES,
-        'years': years,
-        'months': list(enumerate(calendar.month_name[1:], start=1)),
-        'q': params['q'],
-        'selected_category': params['category'],
-        'selected_period': params['period'],
-        'selected_year': params['year'],
-        'selected_month': params['month'],
-        'filters_active': _filters_active(*params.values()),
+        'page_obj': page_obj,
     })
-
 
 @login_required
 def budget_form(request, pk=None):
@@ -617,25 +433,61 @@ def budget_form(request, pk=None):
     budget = get_object_or_404(Budget, pk=pk, user=request.user) if pk else None
     now = timezone.now()
     
-    form = BudgetForm(
-        request.POST or None,
-        instance=budget,
-        initial=None if budget else {
+    if request.method == 'POST':
+        form = BudgetForm(request.POST, instance=budget)
+        if form.is_valid():
+            # Get cleaned data for duplicate check
+            category = form.cleaned_data.get('category')
+            period = form.cleaned_data.get('period')
+            year = form.cleaned_data.get('year')
+            month = form.cleaned_data.get('month')
+            
+            # Check for existing budget (exclude current if editing)
+            existing = Budget.objects.filter(
+                user=request.user,
+                category=category,
+                period=period,
+                year=year,
+                month=month if period == 'monthly' else None
+            )
+            
+            if budget:
+                existing = existing.exclude(pk=budget.pk)
+            
+            if existing.exists():
+                messages.error(
+                    request,
+                    f'A budget already exists for "{category.name}" for {period} {month}/{year}. '
+                    f'Please edit the existing budget instead.'
+                )
+                return render(request, 'budget-form.html', {
+                    'active_page': 'budgets',
+                    'budget': budget,
+                    'form': form,
+                    'period_choices': Budget.PERIOD_CHOICES,
+                })
+            
+            # No duplicate, save the budget
+            obj = form.save(commit=False)
+            obj.user = request.user
+            obj.save()
+            messages.success(request, 'Budget saved successfully.')
+            return redirect('budgets')
+    else:
+        initial = None if budget else {
             'year': now.year,
             'month': now.month,
             'alert_threshold': 80,
-            'period': 'monthly',
-        },
-    )
+            'period': 'monthly'
+        }
+        form = BudgetForm(instance=budget, initial=initial)
     
-    return _save_form(request, form, 'Budget saved.', 'budgets', set_user=True) or render(request, 'budget-form.html', {
+    return render(request, 'budget-form.html', {
         'active_page': 'budgets',
         'budget': budget,
         'form': form,
-        'categories': form.fields['category'].queryset,
         'period_choices': Budget.PERIOD_CHOICES,
     })
-
 
 @login_required
 @require_POST
@@ -645,43 +497,67 @@ def budget_delete(request, pk):
     messages.success(request, 'Budget deleted.')
     return redirect('budgets')
 
-
 @login_required
 def budgets_export(request):
-    """Export budgets with progress to CSV"""
-    params = {
-        'q': request.GET.get('q', '').strip(),
-        'category': _get_int(request.GET.get('category')),
-        'period': request.GET.get('period', '').strip(),
-        'year': _get_int(request.GET.get('year')),
-        'month': _get_int(request.GET.get('month')),
-    }
-    budget_rows = [_budget_progress(b) for b in _budget_queryset(request.user, params)]
-    return export_budgets(budget_rows, request.user.username)
-
+    """Export budgets to CSV"""
+    qs = Budget.objects.select_related('category').filter(user=request.user)
+    
+    if q := request.GET.get('q', '').strip():
+        qs = qs.filter(category__name__icontains=q)
+    if category := _safe_int(request.GET.get('category')):
+        qs = qs.filter(category_id=category)
+    if period := request.GET.get('period', '').strip():
+        qs = qs.filter(period=period)
+    if year := _safe_int(request.GET.get('year')):
+        qs = qs.filter(year=year)
+    if month := _safe_int(request.GET.get('month')):
+        qs = qs.filter(month=month)
+    
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="{request.user.username}_budgets.csv"'
+    
+    writer = csv.writer(response)
+    writer.writerow(['Category', 'Period', 'Year', 'Month', 'Amount'])
+    for b in qs:
+        writer.writerow([
+            b.category.name if b.category else '',
+            b.get_period_display(),
+            b.year,
+            b.month or '',
+            b.amount,
+        ])
+    return response
 
 # ----- Categories -----
 @login_required
 def categories(request):
-    """List all categories"""
+    """List categories"""
     return render(request, 'categories.html', {
         'active_page': 'categories',
         'categories': Category.objects.all(),
     })
 
-
 @login_required
 def category_form(request, pk=None):
     """Create or edit category"""
     category = get_object_or_404(Category, pk=pk) if pk else None
-    form = CategoryForm(request.POST or None, instance=category)
-    return _save_form(request, form, 'Category saved.', 'categories') or render(request, 'category-form.html', {
+    
+    if request.method == 'POST':
+        form = CategoryForm(request.POST, instance=category)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Category saved successfully.')
+            return redirect('categories')
+    else:
+        form = CategoryForm(instance=category)
+    
+    return render(request, 'category-form.html', {
         'active_page': 'categories',
         'category': category,
+        'form': form,
         'type_choices': Category.TYPE_CHOICES,
         'icon_choices': Category.ICON_CHOICES,
     })
-
 
 @login_required
 @require_POST
@@ -691,168 +567,90 @@ def category_delete(request, pk):
     messages.success(request, 'Category deleted.')
     return redirect('categories')
 
-
 # ----- Reports -----
 @login_required
 def reports(request):
-    """Generate reports with year/month filters"""
+    """Generate reports"""
+    user = request.user
     now = timezone.now()
-    year = _get_int(request.GET.get('year')) or now.year
-    month = _get_int(request.GET.get('month'))  # None means "all months"
+    year = _safe_int(request.GET.get('year')) or now.year
+    month = _safe_int(request.GET.get('month'))
     
-    # Build querysets
-    expenses_qs = Expense.objects.filter(user=request.user, date__year=year)
-    incomes_qs = Income.objects.filter(user=request.user, date__year=year)
+    expenses_qs = Expense.objects.filter(user=user, date__year=year)
+    incomes_qs = Income.objects.filter(user=user, date__year=year)
+    
     if month:
         expenses_qs = expenses_qs.filter(date__month=month)
         incomes_qs = incomes_qs.filter(date__month=month)
     
-    income_total = _sum(incomes_qs)
-    expense_total = _sum(expenses_qs)
-    category_rows = _category_rows(expenses_qs)
+    income_total = _sum_amount(incomes_qs)
+    expense_total = _sum_amount(expenses_qs)
+    category_rows = _get_category_data(expenses_qs)
     
-    # Trend data (daily or monthly)
+    # Trend data
     if month:
         days = calendar.monthrange(year, month)[1]
-        day_totals = {r['date__day']: r['total'] for r in expenses_qs.values('date__day').annotate(total=Sum('amount'))}
+        daily_totals = {d['date__day']: d['total'] for d in expenses_qs.values('date__day').annotate(total=Sum('amount'))}
         trend_labels = [f'{d:02d} {calendar.month_abbr[month]}' for d in range(1, days + 1)]
-        trend_values = [float(day_totals.get(d, 0)) for d in range(1, days + 1)]
-        trend_title = 'Daily spend'
+        trend_values = [float(daily_totals.get(d, 0)) for d in range(1, days + 1)]
+        trend_title = f'Daily Spending - {calendar.month_name[month]} {year}'
     else:
-        month_totals = {r['date__month']: r['total'] for r in expenses_qs.values('date__month').annotate(total=Sum('amount'))}
+        monthly_totals = {m['date__month']: m['total'] for m in expenses_qs.values('date__month').annotate(total=Sum('amount'))}
         trend_labels = [calendar.month_abbr[m] for m in range(1, 13)]
-        trend_values = [float(month_totals.get(m, 0)) for m in range(1, 13)]
-        trend_title = 'Monthly spend'
+        trend_values = [float(monthly_totals.get(m, 0)) for m in range(1, 13)]
+        trend_title = f'Monthly Spending - {year}'
     
-    # Available years for filter dropdown
+    # ✅ FIX: Get years correctly - only change this part
+    expense_years = Expense.objects.filter(user=user).dates('date', 'year')
+    income_years = Income.objects.filter(user=user).dates('date', 'year')
+    
     years = sorted(
-        {d.year for d in Expense.objects.filter(user=request.user).dates('date', 'year')} |
-        {d.year for d in Income.objects.filter(user=request.user).dates('date', 'year')} |
-        {now.year},
-        reverse=True,
+        set(
+            [d.year for d in expense_years] +
+            [d.year for d in income_years] +
+            [now.year]
+        ),
+        reverse=True
     )
+    
+    payment_rows = expenses_qs.values('payment_method').annotate(total=Sum('amount')).order_by('-total')
     
     return render(request, 'reports.html', {
         'active_page': 'reports',
         'year': year,
         'month': month,
         'years': years,
-        'months': list(enumerate(calendar.month_name[1:], start=1)),
+        'months': [(i, name) for i, name in enumerate(calendar.month_name[1:], 1)],
         'income_total': income_total,
         'expense_total': expense_total,
         'net': income_total - expense_total,
         'category_rows': category_rows,
-        'payment_rows': expenses_qs.values('payment_method').annotate(total=Sum('amount')).order_by('-total'),
-        'trend_title': trend_title,
+        'payment_rows': payment_rows,
+        'trend_title': trend_title,  # Add this for your chart title
         'trend_labels': json.dumps(trend_labels),
         'trend_values': json.dumps(trend_values),
         'cat_labels': json.dumps([r['name'] for r in category_rows]),
         'cat_values': json.dumps([float(r['total']) for r in category_rows]),
         'cat_colors': json.dumps([r['color'] for r in category_rows]),
     })
+# ============ AUTHENTICATION ============
 
-
-# ============ 2FA VIEWS ============
-
-def mfa_login(request):
-    """
-    Email-based 2FA verification step after password login.
-    Users receive a 6-digit OTP via email.
-    """
-    user_id = request.session.get('mfa_user_id')
-    if not user_id:
-        return redirect('login')
-    
-    user = get_object_or_404(User, id=user_id)
-    
-    # Check if user has an email address
-    if not user.email:
-        messages.error(request, 'No email address associated with your account. Please contact support.')
-        return redirect('login')
-    
-    if request.method == 'POST':
-        if 'send_code' in request.POST:
-            # Generate and send new OTP
-            otp_code = _generate_and_send_otp(user)
-            messages.info(request, f'Verification code sent to {user.email}. For development, check terminal for the code.')
-            
-            return render(request, 'mfa_login.html', {
-                'email': user.email,
-                'step': 'verify',
-                'code_sent': True,
-                'user_id': user.id,
-            })
-        
-        elif 'verify' in request.POST:
-            otp_code = request.POST.get('otp_code', '').strip()
-            
-            if not otp_code or len(otp_code) != 6:
-                messages.error(request, 'Please enter a valid 6-digit code.')
-                return render(request, 'mfa_login.html', {
-                    'email': user.email,
-                    'step': 'verify',
-                    'code_sent': True,
-                })
-            
-            is_valid, message = _verify_otp(user.id, otp_code)
-            
-            if is_valid:
-                # Login successful
-                auth_login(request, user)
-                request.session.pop('mfa_user_id', None)
-                messages.success(request, f'Welcome back, {user.username}!')
-                return redirect('index')
-            else:
-                messages.error(request, message)
-                
-                # Check if code still exists (not expired)
-                if user.id not in _2fa_codes:
-                    # Code was consumed or expired, allow resend
-                    return render(request, 'mfa_login.html', {
-                        'email': user.email,
-                        'step': 'verify',
-                        'code_sent': False,
-                        'code_expired': True,
-                    })
-                
-                return render(request, 'mfa_login.html', {
-                    'email': user.email,
-                    'step': 'verify',
-                    'code_sent': True,
-                })
-    
-    # GET request - initial load
-    # Auto-send code on page load
-    otp_code = _generate_and_send_otp(user)
-    messages.info(request, f'Verification code sent to {user.email}. For development, check terminal for the code.')
-    
-    return render(request, 'mfa_login.html', {
-        'email': user.email,
-        'step': 'verify',
-        'code_sent': True,
-    })
-
-
-# ----- Authentication -----
 def login_view(request):
-    """Login with email-based 2FA support"""
+    """Login with 2FA"""
     if request.user.is_authenticated:
         return redirect('index')
     
     if request.method == 'POST':
-        username = request.POST.get('username')
-        password = request.POST.get('password')
-        
-        # Check if user has 2FA enabled (by checking if email exists)
-        user = authenticate(request, username=username, password=password)
-        
+        user = authenticate(
+            request,
+            username=request.POST.get('username'),
+            password=request.POST.get('password')
+        )
         if user:
-            # If user has email, use 2FA
             if user.email:
                 request.session['mfa_user_id'] = user.id
                 return redirect('mfa_login')
             else:
-                # No email set - direct login
                 auth_login(request, user)
                 messages.success(request, f'Welcome back, {user.username}!')
                 return redirect('index')
@@ -862,8 +660,61 @@ def login_view(request):
     return render(request, 'login.html')
 
 
+def mfa_login(request):
+    """2FA verification"""
+    user_id = request.session.get('mfa_user_id')
+    if not user_id:
+        return redirect('login')
+    
+    user = get_object_or_404(User, id=user_id)
+    
+    if request.method == 'POST':
+        if 'send_code' in request.POST:
+            _generate_and_send_otp(user)
+            messages.info(request, f'Code sent to {user.email}')
+            return render(request, 'mfa_login.html', {
+                'email': user.email,
+                'step': 'verify',
+                'code_sent': True,
+            })
+        
+        elif 'verify' in request.POST:
+            otp = request.POST.get('otp_code', '').strip()
+            valid, msg = _verify_otp(user.id, otp)
+            
+            if valid:
+                auth_login(request, user)
+                request.session.pop('mfa_user_id', None)
+                messages.success(request, f'Welcome back, {user.username}!')
+                return redirect('index')
+            else:
+                messages.error(request, msg)
+                return render(request, 'mfa_login.html', {
+                    'email': user.email,
+                    'step': 'verify',
+                    'code_sent': user.id in _2fa_codes,
+                    'code_expired': user.id not in _2fa_codes,
+                })
+    
+    # GET - auto-send code
+    _generate_and_send_otp(user)
+    messages.info(request, f'Code sent to {user.email}')
+    return render(request, 'mfa_login.html', {
+        'email': user.email,
+        'step': 'verify',
+        'code_sent': True,
+    })
+
+
+@login_required
+def mfa_setup(request):
+    """MFA setup redirect"""
+    messages.info(request, '2FA is email-based. Please use your email for verification.')
+    return redirect('mfa_login')
+
+
 def signup_view(request):
-    """User registration with email requirement for 2FA"""
+    """User registration"""
     if request.user.is_authenticated:
         return redirect('index')
     
@@ -873,99 +724,211 @@ def signup_view(request):
         password1 = request.POST.get('password1')
         password2 = request.POST.get('password2')
         
-        # Validation
+        errors = []
         if not username:
-            messages.error(request, 'Username is required.')
+            errors.append('Username is required.')
         elif User.objects.filter(username=username).exists():
-            messages.error(request, 'Username already taken.')
-        elif not email:
-            messages.error(request, 'Email is required for 2FA verification.')
+            errors.append('Username already taken.')
+        if not email:
+            errors.append('Email is required.')
         elif User.objects.filter(email=email).exists():
-            messages.error(request, 'Email already registered.')
-        elif password1 != password2:
-            messages.error(request, 'Passwords do not match.')
-        elif len(password1 or '') < 6:
-            messages.error(request, 'Password must be at least 6 characters.')
+            errors.append('Email already registered.')
+        if not password1 or len(password1) < 6:
+            errors.append('Password must be at least 6 characters.')
+        if password1 != password2:
+            errors.append('Passwords do not match.')
+        
+        if errors:
+            for error in errors:
+                messages.error(request, error)
         else:
-            # Create user
             user = User.objects.create_user(
                 username=username,
                 email=email,
                 first_name=request.POST.get('first_name', ''),
-                password=password1,
+                password=password1
             )
-            
-            # Log in directly (will trigger 2FA if email is set)
             auth_login(request, user)
-            messages.success(request, f'Account created successfully! Welcome, {username}!')
-            
-            # Since user has email, they'll be prompted for 2FA on next login
+            messages.success(request, f'Welcome, {username}!')
             return redirect('index')
     
     return render(request, 'signup.html')
 
 
 def logout_view(request):
-    """Logout user"""
+    """Logout"""
     auth_logout(request)
     messages.info(request, 'You have been logged out.')
     return redirect('login')
 
-    # Add this to your views.py (near the other views)
-def mfa_setup(request):
-    """Redirect to mfa_login since we're using email-based 2FA"""
-    messages.info(request, '2FA is now email-based. Please use your email for verification.')
-    return redirect('mfa_login')
+# ============ AI FEATURES ============
+
+@login_required
+def ai_assistant(request):
+    """Full page AI Assistant"""
+    return render(request, 'ai_assistant.html', {
+        'active_page': 'ai_assistant',
+    })
 
 @login_required
 def ai_query(request):
-    """Handle natural language queries about finances"""
-    if request.method == 'GET':
-        question = request.GET.get('q', '').strip()
-        if not question:
-            return JsonResponse({'error': 'Please provide a question'}, status=400)
-        
-        # Start background task
-        task = analyze_finances_async.delay(question, request.user.id)
-        
-        return JsonResponse({
-            'task_id': task.id,
-            'status': 'processing',
-            'message': 'Analyzing your financial data...'
-        })
+    """Process AI financial query"""
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
     
-    return JsonResponse({'error': 'Method not allowed'}, status=405)
+    question = request.GET.get('q', '').strip()
+    if not question:
+        return JsonResponse({'error': 'Please provide a question'}, status=400)
+    
+    task = analyze_finances_async.delay(question, request.user.id)
+    return JsonResponse({
+        'task_id': task.id,
+        'status': 'processing',
+        'message': 'Analyzing your financial data...'
+    })
 
 @login_required
 def get_ai_result(request, task_id):
-    """Check the status of an AI query"""
+    """Get AI query result with formatted response"""
     task = AsyncResult(task_id)
     
-    if task.ready():
-        result = task.result
-        if 'error' in result:
-            return JsonResponse({'status': 'error', 'error': result['error']}, status=500)
-        return JsonResponse({
-            'status': 'completed',
-            'result': result
-        })
-    else:
+    if not task.ready():
         return JsonResponse({
             'status': 'processing',
-            'message': 'Still working on your query...'
+            'message': 'Still processing...'
         })
+    
+    result = task.result
+    if not isinstance(result, dict) or result.get('user_id') != request.user.id:
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+    
+    if 'error' in result:
+        return JsonResponse({
+            'status': 'error',
+            'error': result['error']
+        }, status=500)
+    
+    # Aggressively clean the answer
+    if 'answer' in result:
+        import re
+        answer = result['answer']
+        
+        # Remove all thinking patterns
+        answer = re.sub(r'<think>.*?</think>', '', answer, flags=re.DOTALL)
+        answer = re.sub(r'^.*?(thinking|reasoning|analysis|approach|plan|step|draft|refine|evaluate).*?\n', '', answer, flags=re.IGNORECASE | re.MULTILINE)
+        answer = re.sub(r'\n{3,}', '\n\n', answer)
+        
+        # Remove numbered steps
+        answer = re.sub(r'^\d+\.\s+', '', answer, flags=re.MULTILINE)
+        
+        # Remove any remaining thinking indicators
+        answer = re.sub(r'^(Thinking|Analysis|Reasoning|Approach|Plan|Step|Draft|Refine|Evaluate):\s*', '', answer, flags=re.IGNORECASE | re.MULTILINE)
+        
+        result['answer'] = answer.strip()
+    
+    return JsonResponse({
+        'status': 'completed',
+        'result': result
+    })
 
 @login_required
 def forecast(request, months=6):
     """Generate financial forecast"""
-    if request.method == 'GET':
-        # Start background task
-        task = generate_forecast.delay(request.user.id, months)
-        
-        return JsonResponse({
-            'task_id': task.id,
-            'status': 'processing',
-            'message': f'Generating {months}-month forecast...'
-        })
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
     
-    return JsonResponse({'error': 'Method not allowed'}, status=405)
+    task = generate_forecast.delay(request.user.id, months)
+    return JsonResponse({
+        'task_id': task.id,
+        'status': 'processing',
+        'message': f'Generating {months}-month forecast...'
+    })
+
+@login_required
+def ai_forecast(request):
+    """Generate financial forecast (alternative endpoint for AI Assistant)"""
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    months = int(request.GET.get('months', 6))
+    task = generate_forecast.delay(request.user.id, months)
+    return JsonResponse({
+        'task_id': task.id,
+        'status': 'processing',
+        'message': f'Generating {months}-month forecast...'
+    })
+# ============ PROFILE ============
+
+@login_required
+def profile(request):
+    """User profile page - update username, email, password"""
+    user = request.user
+    
+    if request.method == 'POST':
+        # Get form data
+        username = request.POST.get('username', '').strip()
+        email = request.POST.get('email', '').strip()
+        current_password = request.POST.get('current_password', '')
+        new_password = request.POST.get('new_password', '')
+        confirm_password = request.POST.get('confirm_password', '')
+        
+        errors = []
+        success_messages = []
+        
+        # Update username
+        if username and username != user.username:
+            if User.objects.filter(username=username).exclude(pk=user.pk).exists():
+                errors.append('Username already taken.')
+            else:
+                user.username = username
+                success_messages.append('Username updated successfully.')
+        
+        # Update email
+        if email and email != user.email:
+            if User.objects.filter(email=email).exclude(pk=user.pk).exists():
+                errors.append('Email already registered.')
+            else:
+                user.email = email
+                success_messages.append('Email updated successfully.')
+        
+        # Update password
+        if new_password:
+            if not current_password:
+                errors.append('Current password is required to change password.')
+            elif not user.check_password(current_password):
+                errors.append('Current password is incorrect.')
+            elif len(new_password) < 6:
+                errors.append('New password must be at least 6 characters.')
+            elif new_password != confirm_password:
+                errors.append('Passwords do not match.')
+            else:
+                user.set_password(new_password)
+                success_messages.append('Password updated successfully. Please login again.')
+                # Save user first, then log out
+                user.save()
+                auth_logout(request)
+                messages.success(request, 'Password updated! Please login with your new password.')
+                return redirect('login')
+        
+        # If there are errors, show them
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+        else:
+            # Save user if there were changes
+            if success_messages:
+                user.save()
+                for msg in success_messages:
+                    messages.success(request, msg)
+                # If password wasn't changed, stay on profile
+                if 'Password updated' not in success_messages[0] if success_messages else False:
+                    return redirect('profile')
+            else:
+                messages.info(request, 'No changes were made.')
+        
+        return redirect('profile')
+    
+    return render(request, 'profile.html', {
+        'active_page': 'profile',
+        'user': user,
+    })

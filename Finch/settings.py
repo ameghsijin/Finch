@@ -179,10 +179,10 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 # SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 # SECURE_HSTS_PRELOAD = True
 
+# ============ GROQ AI SETTINGS ============
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")  # Default to compound
 
-# ============ GEMINI AI SETTINGS ============
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_MODEL = "gemini-3.5-flash-lite" 
 EXCLUDE_APPS = ["auth", "admin", "contenttypes", "sessions", "messages", "staticfiles"]
 # ============ CELERY SETTINGS ============
 # Redis as message broker (install redis first)
@@ -191,3 +191,9 @@ CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": "redis://localhost:6379/1",
+    }
+}

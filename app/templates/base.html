@@ -14,16 +14,19 @@
   <aside class="sidebar" id="sidebar">
     <div class="logo">Spend<span>Wise</span></div>
     <nav class="nav-links">
-      <a href="/" {% if active_page == 'dashboard' %}class="active"{% endif %}>Dashboard</a>
-      <a href="/expenses/" {% if active_page == 'expenses' %}class="active"{% endif %}>Expenses</a>
-      <a href="/income/" {% if active_page == 'income' %}class="active"{% endif %}>Income</a>
-      <a href="/budget/" {% if active_page == 'budgets' %}class="active"{% endif %}>Budgets</a>
-      <a href="/categories/" {% if active_page == 'categories' %}class="active"{% endif %}>Categories</a>
-      <a href="/reports/" {% if active_page == 'reports' %}class="active"{% endif %}>Reports</a>
+      <a href="{% url 'index' %}" {% if active_page == 'dashboard' %}class="active"{% endif %}>Dashboard</a>
+      <a href="{% url 'expenses' %}" {% if active_page == 'expenses' %}class="active"{% endif %}>Expenses</a>
+      <a href="{% url 'income' %}" {% if active_page == 'income' %}class="active"{% endif %}>Income</a>
+      <a href="{% url 'budgets' %}" {% if active_page == 'budgets' %}class="active"{% endif %}>Budgets</a>
+      <a href="{% url 'categories' %}" {% if active_page == 'categories' %}class="active"{% endif %}>Categories</a>
+      <a href="{% url 'reports' %}" {% if active_page == 'reports' %}class="active"{% endif %}>Reports</a>
+      <a href="{% url 'ai_assistant' %}" {% if active_page == 'ai_assistant' %}class="active"{% endif %}>AI Assistant</a>
     </nav>
     <div class="sidebar-user">
-      <strong>{{ user.get_full_name|default:user.username }}</strong>
-      <a href="/logout/">Sign out</a>
+      <a href="{% url 'profile' %}" style="color:inherit;text-decoration:none;">
+        <strong>{{ request.user.username }}</strong>
+      </a>
+      <a href="{% url 'logout' %}">Sign out</a>
     </div>
   </aside>
   {% include 'cookie_banner.html' %}
@@ -31,7 +34,6 @@
     {% block content %}{% endblock %}
   </main>
 </div>
-{% include 'ai_chatbox.html' %}
 <button class="mobile-toggle" id="menuToggle" aria-label="Toggle menu">☰</button>
 <script>
 document.getElementById('menuToggle').onclick = () => document.getElementById('sidebar').classList.toggle('open');

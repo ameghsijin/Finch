@@ -1,87 +1,128 @@
 {% load static %}
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Set Budget · SpendWise</title>
+  <title>{% if budget %}Edit Budget{% else %}Set Budget{% endif %} · SpendWise</title>
   <link rel="stylesheet" href="{% static 'css/style.css' %}">
   <link rel="icon" href="{% static 'favicon.svg' %}" type="image/svg+xml">
 </head>
 <body>
+
 <div class="app-shell">
+
   <aside class="sidebar" id="sidebar">
     <div class="logo">Spend<span>Wise</span></div>
+
     <nav class="nav-links">
-      <a href="/">Dashboard</a>
-      <a href="/expenses/">Expenses</a>
-      <a href="/income/">Income</a>
-      <a href="/budget/" class="active">Budgets</a>
-      <a href="/categories/">Categories</a>
-      <a href="/reports/">Reports</a>
+      <a href="{% url 'index' %}">Dashboard</a>
+      <a href="{% url 'expenses' %}">Expenses</a>
+      <a href="{% url 'income' %}">Income</a>
+      <a href="{% url 'budgets' %}" class="active">Budgets</a>
+      <a href="{% url 'categories' %}">Categories</a>
+      <a href="{% url 'reports' %}">Reports</a>
     </nav>
+
     <div class="sidebar-user">
-      <strong>Demo User</strong>
-      <a href="/login/">Sign out</a>
+      <strong>{{ request.user.username }}</strong>
+      <a href="{% url 'logout' %}">Sign out</a>
     </div>
   </aside>
 
   <main class="main">
+
+    <!-- Messages -->
+    {% if messages %}
+      {% for message in messages %}
+        <div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+
     <div class="page-header">
       <div>
-        <h1>Set Budget</h1>
-        <p>Define a spending limit for a category</p>
+        <h1>{% if budget %}Edit Budget{% else %}Set Budget{% endif %}</h1>
+        <p>{% if budget %}Update your spending limit{% else %}Define a spending limit for a category{% endif %}</p>
       </div>
     </div>
+
     <div class="panel form-card">
-      <form action="/budget/" method="get">
+      <form method="post" novalidate>
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+        <div class="alert alert-danger">
+          {{ form.non_field_errors }}
+        </div>
+        {% endif %}
+
         <div class="form-group">
-          <label for="category">Category</label>
-          <select class="form-control" id="category">
-            <option>Food & Dining</option>
-            <option>Transport</option>
-            <option>Housing</option>
-            <option>Shopping</option>
-            <option>Entertainment</option>
-          </select>
+          <label for="{{ form.category.id_for_label }}">Category *</label>
+          {{ form.category }}
+          {% if form.category.errors %}
+          <div class="field-error">{{ form.category.errors }}</div>
+          {% endif %}
         </div>
+
         <div class="form-group">
-          <label for="amount">Amount</label>
-          <input class="form-control" type="number" id="amount" step="0.01" min="0.01" placeholder="0.00">
+          <label for="{{ form.amount.id_for_label }}">Amount (₹) *</label>
+          {{ form.amount }}
+          {% if form.amount.errors %}
+          <div class="field-error">{{ form.amount.errors }}</div>
+          {% endif %}
         </div>
+
         <div class="form-group">
-          <label for="period">Period</label>
-          <select class="form-control" id="period">
-            <option value="monthly">Monthly</option>
-            <option value="yearly">Yearly</option>
-          </select>
+          <label for="{{ form.period.id_for_label }}">Period *</label>
+          {{ form.period }}
+          {% if form.period.errors %}
+          <div class="field-error">{{ form.period.errors }}</div>
+          {% endif %}
         </div>
+
         <div class="form-group">
-          <label for="year">Year</label>
-          <input class="form-control" type="number" id="year" value="2026">
+          <label for="{{ form.year.id_for_label }}">Year *</label>
+          {{ form.year }}
+          {% if form.year.errors %}
+          <div class="field-error">{{ form.year.errors }}</div>
+          {% endif %}
         </div>
-        <div class="form-group" id="month-group">
-          <label for="month">Month</label>
-          <input class="form-control" type="number" id="month" min="1" max="12" value="8">
-        </div>
+
         <div class="form-group">
-          <label for="alert">Alert threshold (%)</label>
-          <input class="form-control" type="number" id="alert" min="1" max="100" value="80">
+          <label for="{{ form.month.id_for_label }}">Month</label>
+          {{ form.month }}
+          {% if form.month.errors %}
+          <div class="field-error">{{ form.month.errors }}</div>
+          {% endif %}
+          <small style="color:var(--ink-muted);font-size:.8rem;">Required for monthly budgets</small>
         </div>
-        <div class="form-actions">
-          <button type="submit" class="btn btn-primary">Save</button>
-          <a href="/budget/" class="btn btn-ghost">Cancel</a>
+
+        <div class="form-group">
+          <label for="{{ form.alert_threshold.id_for_label }}">Alert Threshold (%)</label>
+          {{ form.alert_threshold }}
+          {% if form.alert_threshold.errors %}
+          <div class="field-error">{{ form.alert_threshold.errors }}</div>
+          {% endif %}
+          <small style="color:var(--ink-muted);font-size:.8rem;">Get warned when spending reaches this % of budget</small>
+        </div>
+
+        <div class="form-actions" style="display:flex;gap:0.5rem;margin-top:1.5rem;">
+          <button type="submit" class="btn btn-primary">💾 Save</button>
+          <a href="{% url 'budgets' %}" class="btn btn-ghost">Cancel</a>
         </div>
       </form>
     </div>
+
   </main>
 </div>
+
 <button class="mobile-toggle" id="menuToggle">☰</button>
+
 <script>
-document.getElementById('menuToggle').onclick = () => document.getElementById('sidebar').classList.toggle('open');
-const period = document.getElementById('period');
-const monthGroup = document.getElementById('month-group');
-period.onchange = () => { monthGroup.style.display = period.value === 'monthly' ? 'block' : 'none'; };
+document.getElementById('menuToggle').onclick = () =>
+  document.getElementById('sidebar').classList.toggle('open');
 </script>
+
 </body>
 </html>

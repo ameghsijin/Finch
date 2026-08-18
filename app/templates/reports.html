@@ -1,4 +1,5 @@
 {% load static %}
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,12 +7,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Reports · SpendWise</title>
   <link rel="stylesheet" href="{% static 'css/style.css' %}">
-  <link rel="icon" href="{% static 'favicon.svg' %}" type="image/svg+xml">
 </head>
+
 <body>
+
 <div class="app-shell">
-  <aside class="sidebar" id="sidebar">
+
+  <aside class="sidebar">
     <div class="logo">Spend<span>Wise</span></div>
+
     <nav class="nav-links">
       <a href="/">Dashboard</a>
       <a href="/expenses/">Expenses</a>
@@ -20,13 +24,16 @@
       <a href="/categories/">Categories</a>
       <a href="/reports/" class="active">Reports</a>
     </nav>
+
     <div class="sidebar-user">
-      <strong>Demo User</strong>
-      <a href="/login/">Sign out</a>
+      <strong>{{ request.user.username }}</strong>
+      <a href="/logout/">Sign out</a>
     </div>
   </aside>
 
+
   <main class="main">
+
     <div class="page-header">
       <div>
         <h1>Reports</h1>
@@ -34,128 +41,213 @@
       </div>
     </div>
 
-    <form class="filter-bar panel" style="grid-template-columns:1fr 1fr auto">
+
+    <!-- Filters -->
+    <form method="get" class="filter-bar panel"
+          style="grid-template-columns:1fr 1fr auto">
+
       <div class="form-group" style="margin:0">
         <label>Year</label>
-        <select class="form-control">
-          <option selected>2026</option>
-          <option>2025</option>
+
+        <select name="year" class="form-control">
+          {% for y in years %}
+            <option value="{{ y }}"
+              {% if y == year %}selected{% endif %}>
+              {{ y }}
+            </option>
+          {% endfor %}
         </select>
       </div>
+
+
       <div class="form-group" style="margin:0">
         <label>Month</label>
-        <select class="form-control">
-          <option>Full year</option>
-          <option selected>August</option>
+
+        <select name="month" class="form-control">
+
+          <option value=""
+            {% if not month %}selected{% endif %}>
+            Full year
+          </option>
+
+          {% for number, name in months %}
+            <option value="{{ number }}"
+              {% if number == month %}selected{% endif %}>
+              {{ name }}
+            </option>
+          {% endfor %}
+
         </select>
       </div>
-      <button type="button" class="btn btn-secondary">Apply</button>
+
+
+      <button type="submit" class="btn btn-secondary">
+        Apply
+      </button>
+
     </form>
 
-    <div class="stats-grid" style="grid-template-columns:repeat(3,1fr)">
+
+    <!-- Totals -->
+    <div class="stats-grid"
+         style="grid-template-columns:repeat(3,1fr)">
+
       <div class="stat income">
         <div class="label">Total income</div>
-        <div class="value">₹87,000</div>
+        <div class="value">
+          ₹{{ income_total|floatformat:2 }}
+        </div>
       </div>
+
       <div class="stat expense">
         <div class="label">Total expenses</div>
-        <div class="value">₹36,999</div>
+        <div class="value">
+          ₹{{ expense_total|floatformat:2 }}
+        </div>
       </div>
+
       <div class="stat balance">
         <div class="label">Net</div>
-        <div class="value">₹50,001</div>
+        <div class="value">
+          ₹{{ net|floatformat:2 }}
+        </div>
       </div>
+
     </div>
 
+
+    <!-- Charts -->
     <div class="grid-2">
+
       <div class="panel">
-        <h2>Daily spend</h2>
-        <div class="chart-box"><canvas id="dailyChart"></canvas></div>
+        <h2>{{ trend_title }}</h2>
+        <div class="chart-box">
+          <canvas id="dailyChart"></canvas>
+        </div>
       </div>
+
       <div class="panel">
         <h2>Category breakdown</h2>
-        <div class="chart-box"><canvas id="reportCatChart"></canvas></div>
+        <div class="chart-box">
+          <canvas id="reportCatChart"></canvas>
+        </div>
       </div>
+
     </div>
 
+
+    <!-- Tables -->
     <div class="grid-2">
+
       <div class="panel">
         <h2>By category</h2>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Category</th><th>Amount</th></tr></thead>
-            <tbody>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Amount</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {% for row in category_rows %}
               <tr>
-                <td><span class="badge"><span class="badge-dot" style="background:#7C3AED"></span>Housing</span></td>
-                <td class="amount expense">₹22,000</td>
+                <td>{{ row.name }}</td>
+                <td class="amount expense">
+                  ₹{{ row.total|floatformat:2 }}
+                </td>
               </tr>
+            {% empty %}
               <tr>
-                <td><span class="badge"><span class="badge-dot" style="background:#EA580C"></span>Food & Dining</span></td>
-                <td class="amount expense">₹3,650</td>
+                <td colspan="2">No expenses found.</td>
               </tr>
-              <tr>
-                <td><span class="badge"><span class="badge-dot" style="background:#DB2777"></span>Shopping</span></td>
-                <td class="amount expense">₹3,500</td>
-              </tr>
-              <tr>
-                <td><span class="badge"><span class="badge-dot" style="background:#0891B2"></span>Bills</span></td>
-                <td class="amount expense">₹2,100</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
+
+
       <div class="panel">
         <h2>By payment method</h2>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Method</th><th>Amount</th></tr></thead>
-            <tbody>
-              <tr><td>Bank</td><td class="amount expense">₹22,000</td></tr>
-              <tr><td>Upi</td><td class="amount expense">₹8,150</td></tr>
-              <tr><td>Card</td><td class="amount expense">₹5,999</td></tr>
-              <tr><td>Cash</td><td class="amount expense">₹650</td></tr>
-            </tbody>
-          </table>
-        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Amount</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {% for row in payment_rows %}
+              <tr>
+                <td>{{ row.payment_method|default:"Unknown"|title }}</td>
+                <td class="amount expense">
+                  ₹{{ row.total|floatformat:2 }}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="2">No payments found.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
+
     </div>
+
   </main>
+
 </div>
 
-<button class="mobile-toggle" id="menuToggle">☰</button>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script>
-document.getElementById('menuToggle').onclick = () => document.getElementById('sidebar').classList.toggle('open');
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<script>
 new Chart(document.getElementById('dailyChart'), {
   type: 'line',
   data: {
-    labels: ['01 Aug', '05 Aug', '07 Aug', '08 Aug', '09 Aug', '10 Aug'],
+    labels: {{ trend_labels|safe }},
     datasets: [{
-      label: 'Daily spend',
-      data: [22000, 3500, 2100, 1800, 3200, 450],
+      label: '{{ trend_title }}',
+      data: {{ trend_values|safe }},
       borderColor: '#0f766e',
       backgroundColor: 'rgba(15,118,110,0.12)',
       fill: true,
       tension: 0.3
     }]
   },
-  options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false } } }
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      y: { beginAtZero: true }
+    }
+  }
 });
+
 
 new Chart(document.getElementById('reportCatChart'), {
   type: 'pie',
   data: {
-    labels: ['Housing', 'Food', 'Shopping', 'Bills', 'Transport'],
+    labels: {{ cat_labels|safe }},
     datasets: [{
-      data: [22000, 3650, 3500, 2100, 1800],
-      backgroundColor: ['#7C3AED', '#EA580C', '#DB2777', '#0891B2', '#2563EB'],
+      data: {{ cat_values|safe }},
+      backgroundColor: {{ cat_colors|safe }},
       borderWidth: 0
     }]
   },
-  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'bottom' }
+    }
+  }
 });
 </script>
+
 </body>
 </html>

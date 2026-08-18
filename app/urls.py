@@ -28,8 +28,14 @@ urlpatterns = [
     path("logout/", views.logout_view, name="logout"),
     path("mfa/setup/", views.mfa_setup, name="mfa_setup"),
     path("mfa/login/", views.mfa_login, name="mfa_login"),
+    
+    # AI URLs
+    path('ai-assistant/', views.ai_assistant, name='ai_assistant'),  # NEW: Full page AI Assistant
     path('ai-query/', views.ai_query, name='ai_query'),
     path('ai-result/<str:task_id>/', views.get_ai_result, name='ai_result'),
-    path('forecast/', views.forecast, name='forecast'),
-    path('forecast/<int:months>/', views.forecast, name='forecast_months'),
+    path('ai-forecast/', views.ai_forecast, name='ai_forecast'),  # NEW: Forecast endpoint
+    path('forecast/', views.forecast, name='forecast'),  # Keep for backward compatibility
+    path('forecast/<int:months>/', views.forecast, name='forecast_months'),  # Keep for backward compatibility
+    
+    path('profile/', views.profile, name='profile'),
 ]
