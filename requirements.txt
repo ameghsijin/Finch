@@ -53,7 +53,7 @@ anyio==4.6.2.post1
 
 # Pydantic & Typing
 pydantic==2.9.2
-pydantic_core==2.23.4
+pydantic-core==2.23.3
 typing_extensions==4.12.2
 annotated-types==0.7.0
 
