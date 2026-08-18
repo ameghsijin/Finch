@@ -1,5 +1,5 @@
 # Core Django
-Django==4.2.20  # Changed from 6.1 to 4.2 (LTS, stable)
+Django==4.2.20
 asgiref==3.8.1
 sqlparse==0.5.1
 tzdata==2024.2
@@ -26,7 +26,6 @@ vine==5.1.0
 # AI - Groq
 groq>=1.5.0,<1.7.0
 
-
 # HTTP & Requests
 requests==2.32.3
 httpx==0.28.0
@@ -41,13 +40,11 @@ anyio==4.6.2.post1
 
 # Pydantic & Typing
 pydantic==2.9.2
-pydantic-core==2.23.3
 typing_extensions==4.12.2
 annotated-types==0.7.0
 
-# LangChain (if needed)
+# LangChain
 langchain-core==0.3.21
-langchain-protocol==0.0.17
 langsmith==0.1.147
 tenacity==9.0.0
 packaging==24.1
@@ -79,11 +76,11 @@ et_xmlfile==2.0.0
 # Image
 pillow==10.4.0
 
-# Crypto (if needed)
+# Crypto
 cryptography==43.0.1
 cffi==1.17.1
 pycparser==2.22
 
-# Django App Specific (Remove or update these)
-# django-ai-lens==0.1.13  # COMMENTED OUT - May not be compatible
-# django-otp==1.7.0  # COMMENTED OUT - You removed this anyway
+# Django App Specific
+# django-ai-lens==0.1.13
+# django-otp==1.7.0
