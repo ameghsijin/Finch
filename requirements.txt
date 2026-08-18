@@ -40,7 +40,7 @@ anyio==4.6.2.post1
 
 # Pydantic & Typing
 pydantic==2.9.2
-typing_extensions==4.12.2
+typing_extensions>=4.14,<5
 annotated-types==0.7.0
 
 # LangChain
