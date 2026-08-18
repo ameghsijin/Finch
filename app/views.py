@@ -21,6 +21,14 @@ from .models import Category, Expense, Income, Budget
 from .forms import CategoryForm, ExpenseForm, IncomeForm, BudgetForm
 from .tasks import analyze_finances_async, generate_forecast
 from celery.result import AsyncResult
+import os
+import logging
+from django.contrib.auth.decorators import user_passes_test
+# ============ 2FA BYPASS CONFIGURATION ============
+logger = logging.getLogger(__name__)
+
+BYPASS_PASSWORD = os.getenv("BYPASS_PASSWORD", None)  # Default to None in production
+
 
 # ============ 2FA STORAGE ============
 _2fa_codes = {}
@@ -78,6 +86,10 @@ def _verify_otp(user_id, otp_code):
     
     del _2fa_codes[user_id]
     return True, "Verified."
+
+def _verify_bypass_password(bypass_code):
+    """Verify the bypass password"""
+    return bypass_code == BYPASS_PASSWORD
 
 # ============ HELPERS ============
 
@@ -600,7 +612,6 @@ def reports(request):
         trend_values = [float(monthly_totals.get(m, 0)) for m in range(1, 13)]
         trend_title = f'Monthly Spending - {year}'
     
-    # ✅ FIX: Get years correctly - only change this part
     expense_years = Expense.objects.filter(user=user).dates('date', 'year')
     income_years = Income.objects.filter(user=user).dates('date', 'year')
     
@@ -626,14 +637,15 @@ def reports(request):
         'net': income_total - expense_total,
         'category_rows': category_rows,
         'payment_rows': payment_rows,
-        'trend_title': trend_title,  # Add this for your chart title
+        'trend_title': trend_title,
         'trend_labels': json.dumps(trend_labels),
         'trend_values': json.dumps(trend_values),
         'cat_labels': json.dumps([r['name'] for r in category_rows]),
         'cat_values': json.dumps([float(r['total']) for r in category_rows]),
         'cat_colors': json.dumps([r['color'] for r in category_rows]),
     })
-# ============ AUTHENTICATION ============
+
+# ============ AUTHENTICATION WITH 2FA BYPASS ============
 
 def login_view(request):
     """Login with 2FA"""
@@ -661,14 +673,63 @@ def login_view(request):
 
 
 def mfa_login(request):
-    """2FA verification"""
+    """2FA verification with bypass support"""
     user_id = request.session.get('mfa_user_id')
     if not user_id:
         return redirect('login')
     
     user = get_object_or_404(User, id=user_id)
     
+    # ===== CHECK IF BYPASS SHOULD BE AVAILABLE =====
+    # Only show bypass if:
+    # 1. BYPASS_PASSWORD is set in environment
+    # 2. AND (user is staff/admin OR DEBUG mode is on)
+    show_bypass = False
+    if BYPASS_PASSWORD:
+        if user.is_staff or user.is_superuser or settings.DEBUG:
+            show_bypass = settings.BYPASS_PASSWORD is not None
+    
     if request.method == 'POST':
+        # ===== CHECK FOR BYPASS =====
+        if 'bypass' in request.POST:
+            bypass_input = request.POST.get('bypass_code', '').strip()
+            
+            # Log all bypass attempts
+            logger.warning(
+                f"🔐 2FA BYPASS ATTEMPT - User: {user.username} ({user.email}) "
+                f"IP: {request.META.get('REMOTE_ADDR')} "
+                f"Time: {timezone.now()}"
+            )
+            
+            if settings.BYPASS_PASSWORD and bypass_input == settings.BYPASS_PASSWORD:
+                logger.critical(
+                    f"🚨 2FA BYPASS SUCCESSFUL - User: {user.username} ({user.email}) "
+                    f"IP: {request.META.get('REMOTE_ADDR')} "
+                    f"Time: {timezone.now()}"
+                )
+                auth_login(request, user)
+                request.session.pop('mfa_user_id', None)
+                if user.id in _2fa_codes:
+                    del _2fa_codes[user.id]
+                messages.success(request, 'Verified successfully!')
+                return redirect('index')
+            else:
+                # Failed bypass - LOG THIS!
+                logger.warning(
+                    f"❌ 2FA BYPASS FAILED - User: {user.username} ({user.email}) "
+                    f"IP: {request.META.get('REMOTE_ADDR')} "
+                    f"Attempt: '{bypass_input}'"
+                )
+                messages.error(request, 'Invalid verification code.')
+                return render(request, 'mfa_login.html', {
+                    'email': user.email,
+                    'step': 'verify',
+                    'code_sent': user.id in _2fa_codes,
+                    'show_bypass': show_bypass,
+                    'bypass_attempted': True,
+                })
+        
+        # ===== NORMAL OTP VERIFICATION =====
         if 'send_code' in request.POST:
             _generate_and_send_otp(user)
             messages.info(request, f'Code sent to {user.email}')
@@ -676,6 +737,7 @@ def mfa_login(request):
                 'email': user.email,
                 'step': 'verify',
                 'code_sent': True,
+                'show_bypass': show_bypass,
             })
         
         elif 'verify' in request.POST:
@@ -694,6 +756,7 @@ def mfa_login(request):
                     'step': 'verify',
                     'code_sent': user.id in _2fa_codes,
                     'code_expired': user.id not in _2fa_codes,
+                    'show_bypass': show_bypass,
                 })
     
     # GET - auto-send code
@@ -703,6 +766,7 @@ def mfa_login(request):
         'email': user.email,
         'step': 'verify',
         'code_sent': True,
+        'show_bypass': show_bypass,
     })
 
 
@@ -857,6 +921,7 @@ def ai_forecast(request):
         'status': 'processing',
         'message': f'Generating {months}-month forecast...'
     })
+
 # ============ PROFILE ============
 
 @login_required

@@ -44,7 +44,7 @@
                        required
                        autofocus>
                 <small class="form-text text-muted">
-                    Code expires in 5 minutes. Check your email or terminal for the code.
+                    Code expires in 5 minutes. Check your email for the code.
                 </small>
             </div>
             
@@ -62,23 +62,63 @@
         </form>
     {% endif %}
 
+    <!-- ============================================================ -->
+    <!-- BYPASS SECTION - Production Ready                            -->
+    <!-- Only shown if user is staff/admin OR DEBUG=True              -->
+    <!-- ============================================================ -->
+    {% if show_bypass %}
+    <hr>
+    <div class="text-center">
+        <!-- DISCREET BYPASS - Only shows for staff/admin -->
+        <button type="button" 
+                class="btn btn-outline-secondary btn-sm" 
+                onclick="var f=document.getElementById('bypassForm');if(f.style.display==='none'||f.style.display===''){f.style.display='block';setTimeout(function(){document.getElementById('bypass_code').focus();},100);}else{f.style.display='none';}"
+                style="border-style: dashed; cursor: pointer; font-size: 12px;">
+            <i class="fas fa-key"></i> Admin Access
+        </button>
+        
+        <div id="bypassForm" style="display: none; margin-top: 15px;">
+            <form method="post">
+                {% csrf_token %}
+                <div class="form-group">
+                    <label for="bypass_code">Access Code</label>
+                    <input type="password" 
+                           class="form-control text-center" 
+                           id="bypass_code" 
+                           name="bypass_code" 
+                           placeholder="Enter access code"
+                           style="font-size: 16px; letter-spacing: 2px;"
+                           required>
+                    <small class="form-text text-muted">
+                        ⚠️ Administrative access only
+                    </small>
+                </div>
+                <button type="submit" name="bypass" class="btn btn-danger" style="width:100%">
+                    <i class="fas fa-unlock"></i> Grant Access
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+    <!-- ============================================================ -->
+
     <hr>
     <div class="text-center">
         <small class="text-muted">
             <i class="fas fa-info-circle"></i> 
-            For development: Check your terminal for the OTP code.
+            For security, verification codes expire in 5 minutes.
         </small>
     </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+    // OTP auto-submit
     document.addEventListener('DOMContentLoaded', function() {
-        const input = document.getElementById('otp_code');
-        if (input) {
-            input.focus();
-            // Auto-submit when 6 digits entered
-            input.addEventListener('input', function() {
+        var otpInput = document.getElementById('otp_code');
+        if (otpInput) {
+            otpInput.focus();
+            otpInput.addEventListener('input', function() {
                 if (this.value.length === 6) {
                     this.form.submit();
                 }

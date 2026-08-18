@@ -13,6 +13,7 @@ click-plugins==1.1.1.2
 click-repl==0.3.0
 cryptography==50.0.0
 distro==1.9.0
+dj-database-url==3.1.2
 Django==6.1
 django-ai-lens==0.1.13
 django-otp==1.7.0
@@ -26,8 +27,10 @@ google-auth-httplib2==0.4.1
 google-genai==2.18.1
 google-generativeai==0.8.6
 googleapis-common-protos==1.75.0
+groq==1.6.0
 grpcio==1.83.0
 grpcio-status==1.71.2
+gunicorn==26.0.0
 h11==0.16.0
 httpcore==1.0.9
 httplib2==0.32.0
@@ -74,5 +77,6 @@ uuid_utils==0.17.0
 vine==5.1.0
 wcwidth==0.8.2
 websockets==16.1.1
+whitenoise==6.12.0
 xxhash==4.0.0
 zstandard==0.25.0
