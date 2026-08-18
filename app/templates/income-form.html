@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Add Income · SpendWise{% endblock %}
+
+{% block content %}
+    <div class="page-header">
+      <div>
+        <h1>Add Income</h1>
+        <p>Record money coming in</p>
+      </div>
+    </div>
+    <div class="panel form-card">
+      <form action="/income/" method="get">
+        <div class="form-group">
+          <label for="title">Title</label>
+          <input class="form-control" type="text" id="title" placeholder="Income source">
+        </div>
+        <div class="form-group">
+          <label for="amount">Amount</label>
+          <input class="form-control" type="number" id="amount" step="0.01" min="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label for="category">Category</label>
+          <select class="form-control" id="category">
+            <option>Salary</option>
+            <option>Freelance</option>
+            <option>Investments</option>
+            <option>Other Income</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="date">Date</label>
+          <input class="form-control" type="date" id="date" value="2026-08-11">
+        </div>
+        <div class="form-group">
+          <label for="notes">Notes</label>
+          <textarea class="form-control" id="notes" rows="3" placeholder="Optional notes"></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Save</button>
+          <a href="/income/" class="btn btn-ghost">Cancel</a>
+        </div>
+      </form>
+    </div>
+{% endblock %}

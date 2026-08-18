@@ -1,0 +1,41 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}SpendWise{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/style.css' %}">
+  <link rel="icon" href="{% static 'favicon.svg' %}" type="image/svg+xml">
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar" id="sidebar">
+    <div class="logo">Spend<span>Wise</span></div>
+    <nav class="nav-links">
+      <a href="/" {% if active_page == 'dashboard' %}class="active"{% endif %}>Dashboard</a>
+      <a href="/expenses/" {% if active_page == 'expenses' %}class="active"{% endif %}>Expenses</a>
+      <a href="/income/" {% if active_page == 'income' %}class="active"{% endif %}>Income</a>
+      <a href="/budget/" {% if active_page == 'budgets' %}class="active"{% endif %}>Budgets</a>
+      <a href="/categories/" {% if active_page == 'categories' %}class="active"{% endif %}>Categories</a>
+      <a href="/reports/" {% if active_page == 'reports' %}class="active"{% endif %}>Reports</a>
+    </nav>
+    <div class="sidebar-user">
+      <strong>{{ user.get_full_name|default:user.username }}</strong>
+      <a href="/logout/">Sign out</a>
+    </div>
+  </aside>
+  {% include 'cookie_banner.html' %}
+  <main class="main">
+    {% block content %}{% endblock %}
+  </main>
+</div>
+{% include 'ai_chatbox.html' %}
+<button class="mobile-toggle" id="menuToggle" aria-label="Toggle menu">☰</button>
+<script>
+document.getElementById('menuToggle').onclick = () => document.getElementById('sidebar').classList.toggle('open');
+</script>
+{% block extra_scripts %}{% endblock %}
+</body>
+</html>

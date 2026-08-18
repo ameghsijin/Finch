@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Income · SpendWise{% endblock %}
+
+{% block content %}
+    <div class="page-header">
+      <div>
+        <h1>Income</h1>
+        <p>Total shown: <strong>₹{{ total }}</strong></p>
+      </div>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+        <a href="{% url 'income_export' %}?{{ request.GET.urlencode }}" class="btn btn-secondary">Download Excel</a>
+        <a href="{% url 'income_form' %}" class="btn btn-primary">+ Add income</a>
+      </div>
+    </div>
+
+    {% if messages %}
+      {% for message in messages %}
+        <div class="alert alert-warning">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+
+    <form class="filter-bar panel js-filter-form" method="get" action="{% url 'income' %}"
+          style="grid-template-columns:2fr 1.4fr 1fr 1fr auto auto">
+      <div class="form-group" style="margin:0">
+        <label for="q">Search</label>
+        <input class="form-control js-debounce-search" type="search" id="q" name="q" value="{{ q }}"
+               placeholder="Title or notes" autocomplete="off">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label for="category">Category</label>
+        <select class="form-control" id="category" name="category">
+          <option value="">All categories</option>
+          {% for category in categories %}
+          <option value="{{ category.pk }}" {% if selected_category == category.pk %}selected{% endif %}>
+            {{ category.name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group" style="margin:0">
+        <label for="from">From</label>
+        <input class="form-control" type="date" id="from" name="from" value="{{ date_from }}">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label for="to">To</label>
+        <input class="form-control" type="date" id="to" name="to" value="{{ date_to }}">
+      </div>
+      <button type="submit" class="btn btn-secondary">Apply</button>
+      {% if filters_active %}
+      <a href="{% url 'income' %}" class="btn btn-ghost">Clear</a>
+      {% endif %}
+    </form>
+
+    <div class="panel">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Title</th><th>Category</th><th>Date</th><th>Amount</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for income in incomes %}
+            <tr>
+              <td><strong>{{ income.title }}</strong></td>
+              <td>
+                {% if income.category %}
+                <span class="badge">
+                  <span class="badge-dot" style="background:{{ income.category.color }}"></span>
+                  {{ income.category.name }}
+                </span>
+                {% else %}
+                —
+                {% endif %}
+              </td>
+              <td>{{ income.date|date:"M d, Y" }}</td>
+              <td class="amount income">₹{{ income.amount }}</td>
+              <td class="actions">
+                <a href="{% url 'income_edit' income.pk %}" class="btn btn-ghost btn-sm">Edit</a>
+                <form method="post" action="{% url 'income_delete' income.pk %}" style="display:inline"
+                      onsubmit="return confirm('Delete this income?');">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                </form>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="5" style="color:var(--ink-muted)">
+                {% if filters_active %}
+                  No income matches your filters.
+                {% else %}
+                  No income yet. Add one to get started.
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/filter-search.js' %}"></script>
+{% endblock %}
+
+{% include 'includes/pagination.html' %}

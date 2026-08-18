@@ -1,0 +1,40 @@
+{% if not request.COOKIES.cookies_accepted %}
+<div id="cookie-banner" style="
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #1a1a2e;
+    color: white;
+    padding: 20px;
+    text-align: center;
+    z-index: 9999;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.3);
+    font-family: Arial, sans-serif;
+">
+    <p style="margin: 0; display: inline-block; font-size: 16px;">
+        This site uses cookies for better experience. 
+        <a href="" style="color: #4fc3f7; text-decoration: underline;">Learn more</a>
+    </p>
+    <button onclick="acceptCookies()" style="
+        margin-left: 20px;
+        padding: 10px 30px;
+        background: #4CAF50;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        font-size: 16px;
+        cursor: pointer;
+        font-weight: bold;
+    ">
+        Accept Cookies
+    </button>
+</div>
+
+<script>
+function acceptCookies() {
+    document.cookie = "cookies_accepted=true; path=/; max-age=" + (365*24*60*60);
+    document.getElementById('cookie-banner').style.display = 'none';
+}
+</script>
+{% endif %}

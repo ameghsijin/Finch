@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · SpendWise{% endblock %}
+
+{% block content %}
+    <div class="page-header">
+      <div>
+        <h1>Dashboard</h1>
+        <p>Overview for {% now "F Y" %}</p>
+      </div>
+      <div style="display:flex;gap:.6rem;flex-wrap:wrap">
+        <a href="/expense-form/" class="btn btn-primary">+ Expense</a>
+        <a href="/income-form/" class="btn btn-secondary">+ Income</a>
+        <a href="{% url 'mfa_setup' %}" class="btn btn-secondary">🔐 MFA</a>
+      </div>
+    </div>
+
+    {% if budget_alerts %}
+      {% for alert in budget_alerts %}
+      <div class="alert alert-warning">
+        {% if alert.status == 'danger' %}
+        Over budget for <strong>{{ alert.budget.category.name }}</strong>: {{ alert.percent }}% used (₹{{ alert.spent }} / ₹{{ alert.budget.amount }}).
+        {% else %}
+        Approaching limit for <strong>{{ alert.budget.category.name }}</strong>: {{ alert.percent }}% used (₹{{ alert.spent }} / ₹{{ alert.budget.amount }}).
+        {% endif %}
+      </div>
+      {% endfor %}
+    {% endif %}
+
+    <div class="stats-grid">
+      <div class="stat income">
+        <div class="label">Income this month</div>
+        <div class="value">₹{{ income_total }}</div>
+      </div>
+      <div class="stat expense">
+        <div class="label">Expenses this month</div>
+        <div class="value">₹{{ expense_total }}</div>
+      </div>
+      <div class="stat balance">
+        <div class="label">Net balance</div>
+        <div class="value">₹{{ balance }}</div>
+      </div>
+      <div class="stat">
+        <div class="label">Transactions</div>
+        <div class="value">{{ transaction_count }}</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="panel">
+        <h2>Spending by category</h2>
+        <div class="chart-box"><canvas id="categoryChart"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2>Income vs expenses</h2>
+        <div class="chart-box"><canvas id="trendChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="panel">
+        <div class="panel-header">
+          <h2>Recent expenses</h2>
+          <a href="/expenses/">View all</a>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Title</th><th>Category</th><th>Date</th><th>Amount</th></tr>
+            </thead>
+            <tbody>
+              {% for expense in recent_expenses %}
+              <tr>
+                <td>{{ expense.title }}</td>
+                <td>
+                  {% if expense.category %}
+                  <span class="badge"><span class="badge-dot" style="background:{{ expense.category.color }}"></span>{{ expense.category.name }}</span>
+                  {% else %}
+                  —
+                  {% endif %}
+                </td>
+                <td>{{ expense.date|date:"M d" }}</td>
+                <td class="amount expense">₹{{ expense.amount }}</td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="4" style="color:var(--ink-muted)">No expenses yet.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <h2>Budget progress</h2>
+          <a href="{% url 'budgets' %}">Manage</a>
+        </div>
+        {% for row in budget_rows %}
+        <div class="budget-item">
+          <div class="budget-meta">
+            <strong>{{ row.budget.category.name }}</strong>
+            <span>₹{{ row.spent }} / ₹{{ row.budget.amount }}</span>
+          </div>
+          <div class="progress{% if row.status %} {{ row.status }}{% endif %}"><span style="width:{{ row.bar_width }}%"></span></div>
+        </div>
+        {% empty %}
+        <p style="color:var(--ink-muted);margin:0">No budgets for this period. <a href="{% url 'budget_form' %}">Set one</a>.</p>
+        {% endfor %}
+      </div>
+    </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+const catLabels = {{ cat_labels|safe }};
+const catValues = {{ cat_values|safe }};
+const catColors = {{ cat_colors|safe }};
+const trendLabels = {{ trend_labels|safe }};
+const trendIncome = {{ trend_income|safe }};
+const trendExpenses = {{ trend_expenses|safe }};
+
+new Chart(document.getElementById('categoryChart'), {
+  type: 'doughnut',
+  data: {
+    labels: catLabels.length ? catLabels : ['No expenses'],
+    datasets: [{
+      data: catValues.length ? catValues : [1],
+      backgroundColor: catColors.length ? catColors : ['#CBD5E1'],
+      borderWidth: 0
+    }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+});
+
+new Chart(document.getElementById('trendChart'), {
+  type: 'bar',
+  data: {
+    labels: trendLabels,
+    datasets: [
+      { label: 'Income', data: trendIncome, backgroundColor: '#15803d', borderRadius: 6 },
+      { label: 'Expenses', data: trendExpenses, backgroundColor: '#c45c26', borderRadius: 6 }
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, plugins: { legend: { position: 'bottom' } } }
+});
+</script>
+{% endblock %}

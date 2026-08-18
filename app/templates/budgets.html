@@ -1,0 +1,179 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Budgets · SpendWise</title>
+  <link rel="stylesheet" href="{% static 'css/style.css' %}">
+  <link rel="icon" href="{% static 'favicon.svg' %}" type="image/svg+xml">
+</head>
+<body>
+<div class="app-shell">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="logo">Spend<span>Wise</span></div>
+
+    <nav class="nav-links">
+      <a href="/">Dashboard</a>
+      <a href="/expenses/">Expenses</a>
+      <a href="/income/">Income</a>
+      <a href="/budget/" class="active">Budgets</a>
+      <a href="/categories/">Categories</a>
+      <a href="/reports/">Reports</a>
+    </nav>
+
+    <div class="sidebar-user">
+      <strong>{{ request.user.username }}</strong>
+      <a href="{% url 'logout' %}">Sign out</a>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <div class="page-header">
+      <div>
+        <h1>Budgets</h1>
+        <p>Set limits and track progress</p>
+      </div>
+
+      <a href="{% url 'budget_form' %}" class="btn btn-primary">
+        + Set budget
+      </a>
+    </div>
+
+    <div class="panel">
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Period</th>
+              <th>Budget</th>
+              <th>Spent</th>
+              <th>Progress</th>
+              <th></th>
+            </tr>
+          </thead>
+
+          <tbody>
+
+            {% for row in budget_rows %}
+            <tr>
+
+              <!-- Category -->
+              <td>
+                <span class="badge">
+                  <span
+                    class="badge-dot"
+                    style="background:{{ row.budget.category.color }}">
+                  </span>
+
+                  {{ row.budget.category.name }}
+                </span>
+              </td>
+
+              <!-- Period -->
+              <td>
+                {% if row.budget.period == 'monthly' %}
+                  {{ row.budget.month }}/{{ row.budget.year }}
+                  <div style="color:var(--ink-muted);font-size:.8rem">
+                    Monthly
+                  </div>
+                {% else %}
+                  {{ row.budget.year }}
+                  <div style="color:var(--ink-muted);font-size:.8rem">
+                    Yearly
+                  </div>
+                {% endif %}
+              </td>
+
+              <!-- Budget -->
+              <td>
+                ₹{{ row.budget.amount }}
+              </td>
+
+              <!-- Spent -->
+              <td class="amount{% if row.status == 'danger' %} expense{% endif %}">
+                ₹{{ row.spent }}
+              </td>
+
+              <!-- Progress -->
+              <td style="min-width:180px">
+
+                <div class="budget-meta" style="margin-bottom:.35rem">
+                  <span>{{ row.percent }}%</span>
+
+                  {% if row.remaining >= 0 %}
+                    <span>₹{{ row.remaining }} left</span>
+                  {% else %}
+                    <span>₹{{ row.remaining|stringformat:"s"|slice:"1:" }} over</span>
+                  {% endif %}
+                </div>
+
+                <div class="progress{% if row.status %} {{ row.status }}{% endif %}">
+                  <span style="width:{{ row.bar_width }}%"></span>
+                </div>
+
+              </td>
+
+              <!-- Actions -->
+              <td class="actions">
+
+                <a
+                  href="{% url 'budget_edit' row.budget.pk %}"
+                  class="btn btn-ghost btn-sm">
+                  Edit
+                </a>
+
+                <form
+                  method="post"
+                  action="{% url 'budget_delete' row.budget.pk %}"
+                  style="display:inline">
+
+                  {% csrf_token %}
+
+                  <button
+                    type="submit"
+                    class="btn btn-danger btn-sm"
+                    onclick="return confirm('Delete this budget?');">
+                    Delete
+                  </button>
+
+                </form>
+
+              </td>
+
+            </tr>
+
+            {% empty %}
+
+            <tr>
+              <td
+                colspan="6"
+                style="color:var(--ink-muted);text-align:center;padding:2rem">
+                No budgets found.
+              </td>
+            </tr>
+
+            {% endfor %}
+
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+
+  </main>
+</div>
+
+<button class="mobile-toggle" id="menuToggle">☰</button>
+
+<script>
+document.getElementById('menuToggle').onclick = () =>
+  document.getElementById('sidebar').classList.toggle('open');
+</script>
+
+</body>
+</html>

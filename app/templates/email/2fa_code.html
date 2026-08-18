@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #4F46E5; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+        .code { font-size: 36px; font-weight: bold; color: #4F46E5; padding: 30px; text-align: center; letter-spacing: 8px; background: #f8f9fa; border-radius: 8px; margin: 20px 0; }
+        .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666; text-align: center; }
+        .warning { color: #dc3545; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>🔐 SpendWise 2FA Verification</h2>
+        </div>
+        
+        <p>Hello,</p>
+        <p>You requested a verification code to log in to your SpendWise account.</p>
+        
+        <div class="code">{{ otp_code }}</div>
+        
+        <p><strong>⚠️ This code will expire in 5 minutes.</strong></p>
+        <p>If you didn't request this code, please ignore this email or contact support.</p>
+        
+        <div class="footer">
+            <p>Best regards,<br><strong>SpendWise Team</strong></p>
+            <p><small>This is an automated message, please do not reply to this email.</small></p>
+            <p><small>© 2024 SpendWise. All rights reserved.</small></p>
+        </div>
+    </div>
+</body>
+</html>

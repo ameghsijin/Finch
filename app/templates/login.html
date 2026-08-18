@@ -1,0 +1,37 @@
+{% extends "base_auth.html" %}
+{% block title %}Sign in · SpendWise{% endblock %}
+
+{% block content %}
+    <h1>Welcome back</h1>
+    <p class="subtitle">Sign in to manage expenses and budgets.</p>
+    
+    {% if messages %}
+      {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+    
+    <form method="post">
+      {% csrf_token %}
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input class="form-control" type="text" id="username" name="username" placeholder="Username" required>
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input class="form-control" type="password" id="password" name="password" placeholder="Password" required>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary" style="width:100%">Sign in</button>
+      </div>
+    </form>
+    
+    <div class="text-center mt-3">
+      <small class="text-muted">
+        <i class="fas fa-shield-alt"></i> 
+        Email-based 2FA enabled.
+      </small>
+    </div>
+    
+    <p class="auth-footer">New here? <a href="/signup/">Create an account</a></p>
+{% endblock %}

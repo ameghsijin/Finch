@@ -1,0 +1,72 @@
+<!-- 
+{% extends "base.html" %}
+{% block title %}MFA Setup · SpendWise{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Multi-Factor Authentication (MFA)</h1>
+</div>
+
+<div class="panel" style="max-width:600px;margin:0 auto;">
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+
+    {% if has_mfa %}
+        <div style="text-align:center;padding:2rem 0;">
+            <p style="color:green;font-size:2rem;">✅</p>
+            <h3>MFA is enabled</h3>
+            <p>Your account is protected with multi-factor authentication.</p>
+            
+            <form method="post" style="margin-top:2rem;">
+                {% csrf_token %}
+                <button type="submit" name="disable" class="btn btn-danger" 
+                        onclick="return confirm('Disable MFA? This will make your account less secure.')">
+                    Disable MFA
+                </button>
+            </form>
+        </div>
+    {% else %}
+        <div style="text-align:center;padding:2rem 0;">
+            <h3>Enable MFA</h3>
+            <p>Add an extra layer of security to your account.</p>
+            
+            {% if step == 'setup' %}
+                <form method="post" style="margin-top:2rem;">
+                    {% csrf_token %}
+                    <button type="submit" name="enable" class="btn btn-primary">
+                        Enable MFA
+                    </button>
+                </form>
+            
+            {% elif step == 'verify' %}
+                <div style="margin:2rem 0;">
+                    <div style="background:#fff3cd;padding:1.5rem;border-radius:8px;margin:1rem 0;">
+                        <h3>💡 Check your terminal!</h3>
+                        <p>Look for the OTP code printed in your terminal window.</p>
+                        <p style="font-size:0.9rem;color:#666;">Example: <code>OTP Code: 482917</code></p>
+                    </div>
+                    
+                    <form method="post" style="margin-top:1rem;">
+                        {% csrf_token %}
+                        <input type="hidden" name="device_id" value="{{ device_id }}">
+                        <div class="form-group">
+                            <label for="otp_code">Enter OTP Code</label>
+                            <input type="text" id="otp_code" name="otp_code" 
+                                   placeholder="Enter 6-digit code" 
+                                   class="form-control" required
+                                   style="text-align:center;font-size:1.5rem;letter-spacing:0.5rem;max-width:200px;margin:0 auto;">
+                        </div>
+                        <button type="submit" name="verify" class="btn btn-primary" style="margin-top:1rem;">
+                            Verify & Enable
+                        </button>
+                    </form>
+                </div>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+ -->

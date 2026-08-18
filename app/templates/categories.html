@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Categories · SpendWise{% endblock %}
+
+{% block content %}
+    <div class="page-header">
+      <div>
+        <h1>Categories</h1>
+        <p>Organize income and expenses</p>
+      </div>
+      <a href="{% url 'category_form' %}" class="btn btn-primary">+ Add category</a>
+    </div>
+
+    {% if messages %}
+      {% for message in messages %}
+        <div class="alert alert-warning">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+
+    {% if categories %}
+    <div class="category-grid">
+      {% for category in categories %}
+      <div class="category-tile">
+        <div class="top">
+          <div class="swatch" style="background:{{ category.color }}"></div>
+          <div class="actions">
+            <a href="{% url 'category_edit' category.pk %}" class="btn btn-ghost btn-sm">Edit</a>
+            <form method="post" action="{% url 'category_delete' category.pk %}" style="display:inline"
+                  onsubmit="return confirm('Delete this category?');">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+            </form>
+          </div>
+        </div>
+        <strong>{{ category.name }}</strong>
+        <div style="color:var(--ink-muted);font-size:.9rem;margin-top:.25rem">{{ category.get_type_display }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="panel">
+      <p style="color:var(--ink-muted);margin:0">No categories yet. Add one to get started.</p>
+    </div>
+    {% endif %}
+{% endblock %}
