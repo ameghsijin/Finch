@@ -1,128 +1,182 @@
-{% load static %}
+{% extends "base.html" %}
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% if budget %}Edit Budget{% else %}Set Budget{% endif %} · SpendWise</title>
-  <link rel="stylesheet" href="{% static 'css/style.css' %}">
-  <link rel="icon" href="{% static 'favicon.svg' %}" type="image/svg+xml">
-</head>
-<body>
+{% block title %}
+  {% if budget %}Edit Budget{% else %}Set Budget{% endif %} · Finch
+{% endblock %}
 
-<div class="app-shell">
+{% block content %}
+<div class="page-shell">
 
-  <aside class="sidebar" id="sidebar">
-    <div class="logo">Spend<span>Wise</span></div>
-
-    <nav class="nav-links">
-      <a href="{% url 'index' %}">Dashboard</a>
-      <a href="{% url 'expenses' %}">Expenses</a>
-      <a href="{% url 'income' %}">Income</a>
-      <a href="{% url 'budgets' %}" class="active">Budgets</a>
-      <a href="{% url 'categories' %}">Categories</a>
-      <a href="{% url 'reports' %}">Reports</a>
-    </nav>
-
-    <div class="sidebar-user">
-      <strong>{{ request.user.username }}</strong>
-      <a href="{% url 'logout' %}">Sign out</a>
-    </div>
-  </aside>
-
-  <main class="main">
-
-    <!-- Messages -->
-    {% if messages %}
-      {% for message in messages %}
-        <div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>
-      {% endfor %}
-    {% endif %}
-
-    <div class="page-header">
-      <div>
-        <h1>{% if budget %}Edit Budget{% else %}Set Budget{% endif %}</h1>
-        <p>{% if budget %}Update your spending limit{% else %}Define a spending limit for a category{% endif %}</p>
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags|default:'info' }}">
+        {{ message }}
       </div>
+    {% endfor %}
+  {% endif %}
+
+
+  <div class="page-intro">
+    <div class="page-intro-copy">
+      <p class="eyebrow">Money</p>
+
+      <h1>
+        {% if budget %}Edit budget{% else %}Set a budget{% endif %}
+      </h1>
+
+      <p>
+        Give a category a spending limit and let Finch keep watch.
+      </p>
+    </div>
+  </div>
+
+
+  <div class="panel form-card">
+
+    <div class="form-card-header">
+      <h2>Budget details</h2>
+      <p>Choose how much you want to allow and when it should apply.</p>
     </div>
 
-    <div class="panel form-card">
-      <form method="post" novalidate>
-        {% csrf_token %}
 
-        {% if form.non_field_errors %}
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
         <div class="alert alert-danger">
           {{ form.non_field_errors }}
         </div>
-        {% endif %}
+      {% endif %}
 
-        <div class="form-group">
-          <label for="{{ form.category.id_for_label }}">Category *</label>
-          {{ form.category }}
-          {% if form.category.errors %}
-          <div class="field-error">{{ form.category.errors }}</div>
-          {% endif %}
+
+      <div class="form-section">
+
+        <div class="form-section-title">
+          Budget
         </div>
 
-        <div class="form-group">
-          <label for="{{ form.amount.id_for_label }}">Amount (₹) *</label>
-          {{ form.amount }}
-          {% if form.amount.errors %}
-          <div class="field-error">{{ form.amount.errors }}</div>
-          {% endif %}
+        <div class="form-grid">
+
+          <div class="form-field amount-field">
+            <label for="{{ form.amount.id_for_label }}">
+              Amount <span class="field-required">*</span>
+            </label>
+
+            {{ form.amount }}
+
+            {% if form.amount.errors %}
+              <div class="field-error">{{ form.amount.errors }}</div>
+            {% endif %}
+          </div>
+
+
+          <div class="form-field">
+            <label for="{{ form.category.id_for_label }}">
+              Category <span class="field-required">*</span>
+            </label>
+
+            {{ form.category }}
+
+            {% if form.category.errors %}
+              <div class="field-error">{{ form.category.errors }}</div>
+            {% endif %}
+          </div>
+
+
+          <div class="form-field">
+            <label for="{{ form.period.id_for_label }}">
+              Period <span class="field-required">*</span>
+            </label>
+
+            {{ form.period }}
+
+            {% if form.period.errors %}
+              <div class="field-error">{{ form.period.errors }}</div>
+            {% endif %}
+          </div>
+
         </div>
 
-        <div class="form-group">
-          <label for="{{ form.period.id_for_label }}">Period *</label>
-          {{ form.period }}
-          {% if form.period.errors %}
-          <div class="field-error">{{ form.period.errors }}</div>
-          {% endif %}
+      </div>
+
+
+      <div class="form-section">
+
+        <div class="form-section-title">
+          Time period
         </div>
 
-        <div class="form-group">
-          <label for="{{ form.year.id_for_label }}">Year *</label>
-          {{ form.year }}
-          {% if form.year.errors %}
-          <div class="field-error">{{ form.year.errors }}</div>
-          {% endif %}
+        <div class="form-grid three">
+
+          <div class="form-field">
+            <label for="{{ form.month.id_for_label }}">
+              Month
+            </label>
+
+            {{ form.month }}
+
+            <small class="field-help">
+              Use 1–12 for monthly budgets.
+            </small>
+
+            {% if form.month.errors %}
+              <div class="field-error">{{ form.month.errors }}</div>
+            {% endif %}
+          </div>
+
+
+          <div class="form-field">
+            <label for="{{ form.year.id_for_label }}">
+              Year <span class="field-required">*</span>
+            </label>
+
+            {{ form.year }}
+
+            {% if form.year.errors %}
+              <div class="field-error">{{ form.year.errors }}</div>
+            {% endif %}
+          </div>
+
+
+          <div class="form-field">
+            <label for="{{ form.alert_threshold.id_for_label }}">
+              Alert threshold
+            </label>
+
+            {{ form.alert_threshold }}
+
+            <small class="field-help">
+              Finch can warn you once this percentage is reached.
+            </small>
+
+            {% if form.alert_threshold.errors %}
+              <div class="field-error">{{ form.alert_threshold.errors }}</div>
+            {% endif %}
+          </div>
+
         </div>
 
-        <div class="form-group">
-          <label for="{{ form.month.id_for_label }}">Month</label>
-          {{ form.month }}
-          {% if form.month.errors %}
-          <div class="field-error">{{ form.month.errors }}</div>
-          {% endif %}
-          <small style="color:var(--ink-muted);font-size:.8rem;">Required for monthly budgets</small>
+        <div class="budget-note">
+          Example: an 80% threshold means Finch can warn you when
+          you've used roughly four-fifths of the budget.
         </div>
 
-        <div class="form-group">
-          <label for="{{ form.alert_threshold.id_for_label }}">Alert Threshold (%)</label>
-          {{ form.alert_threshold }}
-          {% if form.alert_threshold.errors %}
-          <div class="field-error">{{ form.alert_threshold.errors }}</div>
-          {% endif %}
-          <small style="color:var(--ink-muted);font-size:.8rem;">Get warned when spending reaches this % of budget</small>
-        </div>
+      </div>
 
-        <div class="form-actions" style="display:flex;gap:0.5rem;margin-top:1.5rem;">
-          <button type="submit" class="btn btn-primary">💾 Save</button>
-          <a href="{% url 'budgets' %}" class="btn btn-ghost">Cancel</a>
-        </div>
-      </form>
-    </div>
 
-  </main>
+      <div class="form-actions">
+        <a href="{% url 'budgets' %}" class="btn btn-ghost">
+          Cancel
+        </a>
+
+        <button type="submit" class="btn btn-primary">
+          {% if budget %}Save changes{% else %}Save budget{% endif %}
+        </button>
+      </div>
+
+    </form>
+
+  </div>
+
 </div>
-
-<button class="mobile-toggle" id="menuToggle">☰</button>
-
-<script>
-document.getElementById('menuToggle').onclick = () =>
-  document.getElementById('sidebar').classList.toggle('open');
-</script>
-
-</body>
-</html>
+{% endblock %}

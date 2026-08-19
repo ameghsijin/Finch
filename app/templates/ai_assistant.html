@@ -1,404 +1,296 @@
-<!-- templates/ai_assistant.html -->
-
 {% extends "base.html" %}
-{% load static %}
 
-{% block title %}AI Assistant · SpendWise{% endblock %}
+{% block title %}Ask Finch · Finch{% endblock %}
 
 {% block content %}
 
-<div class="page-header">
-  <div>
-    <h1>AI Financial Assistant</h1>
-    <p>Ask questions about your finances and get instant insights</p>
+<div class="page-shell">
+
+  <div class="page-intro">
+    <div class="page-intro-copy">
+      <p class="eyebrow">Finch intelligence</p>
+      <h1>Ask Finch</h1>
+      <p>Ask questions, understand your spending, and make your next decision.</p>
+    </div>
   </div>
-</div>
 
-<div class="panel ai-chat-panel">
 
-  <!-- Messages -->
-  <div id="chatMessages" class="chat-messages">
+  <div class="panel ai-chat-panel">
 
-    <div id="welcomeMessage" class="chat-welcome">
-      <div class="chat-welcome-icon">💬</div>
-      <p>Ask me anything about your finances!</p>
-      <p class="chat-welcome-hint">
-        Try: "How much did I spend on food this month?"
-      </p>
+    <div id="chatMessages" class="chat-messages">
+
+      <div id="welcomeMessage" class="chat-welcome">
+        <div class="chat-welcome-icon">✦</div>
+
+        <strong>What are we looking at today?</strong>
+
+        <p>
+          Ask Finch about your spending, income, budgets, or habits.
+        </p>
+
+        <div class="chat-suggestions">
+          <button
+            type="button"
+            class="chat-suggestion"
+            data-question="How much did I spend this month?"
+          >
+            How much did I spend this month?
+          </button>
+
+          <button
+            type="button"
+            class="chat-suggestion"
+            data-question="Where am I spending the most?"
+          >
+            Where am I spending the most?
+          </button>
+
+          <button
+            type="button"
+            class="chat-suggestion"
+            data-question="How can I lower my expenses next month?"
+          >
+            How can I lower my expenses next month?
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+
+    <div class="chat-input-area">
+
+      <input
+        type="text"
+        id="questionInput"
+        class="form-control"
+        placeholder="Ask Finch about your finances..."
+        autocomplete="off"
+      >
+
+      <button
+        type="button"
+        id="sendButton"
+        class="btn btn-primary"
+      >
+        Ask
+      </button>
+
     </div>
 
   </div>
 
-  <!-- Input -->
-  <div class="chat-input-area">
-
-    <input
-      type="text"
-      id="questionInput"
-      class="form-control"
-      placeholder="Ask a question about your finances..."
-      autocomplete="off"
-    >
-
-    <button
-      type="button"
-      id="sendButton"
-      class="btn btn-primary"
-    >
-      Send
-    </button>
-
-  </div>
-
 </div>
 
+{% endblock %}
+
+
+{% block extra_scripts %}
 
 <script>
+function removeWelcome() {
+  const welcome = document.getElementById("welcomeMessage");
+  if (welcome) welcome.remove();
+}
+
 
 function addMessage(type, content) {
+  removeWelcome();
 
-  const messages = document.getElementById('chatMessages');
+  const messages = document.getElementById("chatMessages");
+  const wrapper = document.createElement("div");
+  const bubble = document.createElement("div");
 
-  const welcome = document.getElementById('welcomeMessage');
-
-  if (welcome) {
-    welcome.remove();
-  }
-
-  const messageDiv = document.createElement('div');
-
-  messageDiv.className = `chat-message ${type}`;
-
-  const bubble = document.createElement('div');
-
-  bubble.className = 'chat-bubble';
-
-  /*
-   * IMPORTANT:
-   * Use textContent instead of innerHTML.
-   * This prevents user/AI text from being interpreted as HTML.
-   */
+  wrapper.className = `chat-message ${type}`;
+  bubble.className = "chat-bubble";
   bubble.textContent = content;
 
-  messageDiv.appendChild(bubble);
+  wrapper.appendChild(bubble);
+  messages.appendChild(wrapper);
+  messages.scrollTop = messages.scrollHeight;
+}
 
-  messages.appendChild(messageDiv);
 
+function addLoading() {
+  removeWelcome();
+
+  const messages = document.getElementById("chatMessages");
+  const wrapper = document.createElement("div");
+  const bubble = document.createElement("div");
+
+  wrapper.id = "loadingMessage";
+  wrapper.className = "chat-message bot";
+
+  bubble.className = "chat-bubble";
+  bubble.innerHTML = `
+    <span class="thinking-text">Finch is thinking</span>
+    <span class="dots">...</span>
+  `;
+
+  wrapper.appendChild(bubble);
+  messages.appendChild(wrapper);
   messages.scrollTop = messages.scrollHeight;
 }
 
 
 function removeLoading() {
-
-  const loading = document.getElementById('loadingMessage');
-
-  if (loading) {
-    loading.remove();
-  }
-
+  const loading = document.getElementById("loadingMessage");
+  if (loading) loading.remove();
 }
 
 
-function addLoading() {
+function setInputEnabled(enabled) {
+  document.getElementById("questionInput").disabled = !enabled;
+  document.getElementById("sendButton").disabled = !enabled;
 
-  const messages = document.getElementById('chatMessages');
-
-  const messageDiv = document.createElement('div');
-
-  messageDiv.id = 'loadingMessage';
-
-  messageDiv.className = 'chat-message bot';
-
-  const bubble = document.createElement('div');
-
-  bubble.className = 'chat-bubble';
-
-  bubble.innerHTML = `
-    <span class="thinking-text">Thinking</span>
-    <span class="dots">...</span>
-  `;
-
-  messageDiv.appendChild(bubble);
-
-  messages.appendChild(messageDiv);
-
-  messages.scrollTop = messages.scrollHeight;
-
+  if (enabled) {
+    document.getElementById("questionInput").focus();
+  }
 }
 
 
-function askQuestion() {
-
-  const input = document.getElementById('questionInput');
-
-  const question = input.value.trim();
-
-  if (!question) {
-    return;
-  }
-
-  input.value = '';
-
-  input.disabled = true;
-
-  document.getElementById('sendButton').disabled = true;
-
-  // Show user's message immediately.
-  addMessage('user', question);
-
-  // Show loading indicator.
-  addLoading();
-
-  fetch(`/ai-query/?q=${encodeURIComponent(question)}`)
-
-    .then(response => {
-
-      if (!response.ok) {
-        throw new Error('Request failed');
-      }
-
-      return response.json();
-
-    })
-
-    .then(data => {
-
-      if (data.status === 'processing') {
-
-        pollResult(data.task_id);
-
-      } else if (data.status === 'error') {
-
-        removeLoading();
-
-        addMessage(
-          'bot',
-          data.error || 'Something went wrong. Please try again.'
-        );
-
-        enableInput();
-
-      } else {
-
-        removeLoading();
-
-        addMessage(
-          'bot',
-          'Something went wrong. Please try again.'
-        );
-
-        enableInput();
-
-      }
-
-    })
-
-    .catch(() => {
-
-      removeLoading();
-
-      addMessage(
-        'bot',
-        'Unable to connect to Finch right now. Please try again.'
-      );
-
-      enableInput();
-
-    });
-
+function showError(message) {
+  removeLoading();
+  addMessage("bot", message);
+  setInputEnabled(true);
 }
 
 
 function pollResult(taskId) {
-
   let attempts = 0;
-
   const maxAttempts = 30;
 
   const interval = setInterval(() => {
-
     attempts++;
 
     fetch(`/ai-result/${taskId}/`)
-
       .then(response => {
-
         if (!response.ok) {
-          throw new Error('Result request failed');
+          throw new Error("Result request failed");
         }
-
         return response.json();
-
       })
-
       .then(data => {
 
-        if (data.status === 'completed') {
-
+        if (data.status === "completed") {
           clearInterval(interval);
 
           removeLoading();
 
           const result = data.result || {};
-
           const answer =
             result.answer ||
             result.error ||
-            'I could not find an answer to that.';
+            "I couldn't find an answer to that.";
 
-          addMessage('bot', answer);
-
-          enableInput();
-
+          addMessage("bot", answer);
+          setInputEnabled(true);
+          return;
         }
 
-        else if (data.status === 'error') {
-
+        if (data.status === "error") {
           clearInterval(interval);
 
-          removeLoading();
-
-          addMessage(
-            'bot',
-            data.error || 'Something went wrong.'
+          showError(
+            data.error ||
+            "Something went wrong. Please try again."
           );
 
-          enableInput();
-
+          return;
         }
-
-        else if (attempts >= maxAttempts) {
-
-          clearInterval(interval);
-
-          removeLoading();
-
-          addMessage(
-            'bot',
-            'The request took too long. Please try again.'
-          );
-
-          enableInput();
-
-        }
-
-      })
-
-      .catch(() => {
 
         if (attempts >= maxAttempts) {
-
           clearInterval(interval);
 
-          removeLoading();
-
-          addMessage(
-            'bot',
-            'Unable to retrieve the answer. Please try again.'
+          showError(
+            "That request took too long. Please try again."
           );
-
-          enableInput();
-
         }
+      })
+      .catch(() => {
+        if (attempts >= maxAttempts) {
+          clearInterval(interval);
 
+          showError(
+            "Unable to retrieve the answer. Please try again."
+          );
+        }
       });
 
   }, 2000);
-
 }
 
 
-function enableInput() {
+function askQuestion(question = null) {
+  const input = document.getElementById("questionInput");
+  const text = (question || input.value).trim();
 
-  const input = document.getElementById('questionInput');
+  if (!text) return;
 
-  const button = document.getElementById('sendButton');
+  input.value = "";
+  setInputEnabled(false);
 
-  input.disabled = false;
+  addMessage("user", text);
+  addLoading();
 
-  button.disabled = false;
+  fetch(`/ai-query/?q=${encodeURIComponent(text)}`)
+    .then(response => {
+      if (!response.ok) {
+        throw new Error("Request failed");
+      }
+
+      return response.json();
+    })
+    .then(data => {
+
+      if (data.status === "processing") {
+        pollResult(data.task_id);
+        return;
+      }
+
+      showError(
+        data.error ||
+        "Something went wrong. Please try again."
+      );
+    })
+    .catch(() => {
+      showError(
+        "Unable to connect to Finch right now. Please try again."
+      );
+    });
+}
+
+
+document.addEventListener("DOMContentLoaded", () => {
+
+  const input = document.getElementById("questionInput");
+  const button = document.getElementById("sendButton");
 
   input.focus();
 
-}
+  button.addEventListener("click", () => askQuestion());
 
-
-/*
- * Send with Enter.
- */
-document
-  .getElementById('questionInput')
-  .addEventListener('keydown', function(event) {
-
-    if (event.key === 'Enter') {
-
+  input.addEventListener("keydown", event => {
+    if (event.key === "Enter") {
       event.preventDefault();
-
       askQuestion();
-
     }
-
   });
 
-
-/*
- * Send button.
- */
-document
-  .getElementById('sendButton')
-  .addEventListener('click', askQuestion);
-
-
-/*
- * Focus input when page loads.
- */
-document.addEventListener('DOMContentLoaded', function() {
-
-  document
-    .getElementById('questionInput')
-    .focus();
+  document.querySelectorAll(".chat-suggestion").forEach(button => {
+    button.addEventListener("click", () => {
+      askQuestion(button.dataset.question);
+    });
+  });
 
 });
-
 </script>
 
 
 <style>
-
-.ai-chat-panel {
-  display: flex;
-  flex-direction: column;
-  height: 600px;
-  padding: 0;
-  overflow: hidden;
-}
-
-.chat-messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 1.5rem;
-  background: var(--bg);
-}
-
-.chat-welcome {
-  text-align: center;
-  color: var(--ink-muted);
-  padding: 2rem;
-}
-
-.chat-welcome-icon {
-  font-size: 3rem;
-  margin-bottom: 1rem;
-}
-
-.chat-welcome-hint {
-  font-size: 0.9rem;
-  margin-top: 0.4rem;
-}
-
 .chat-message {
   display: flex;
-  margin: 0.6rem 0;
+  margin: .6rem 0;
 }
 
 .chat-message.user {
@@ -411,21 +303,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
 .chat-bubble {
   max-width: 70%;
-  padding: 0.75rem 1rem;
+  padding: .75rem 1rem;
   border-radius: 12px;
-  word-wrap: break-word;
-  white-space: pre-wrap;
   line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
-/* User message */
 .chat-message.user .chat-bubble {
   background: var(--brand);
-  color: #ffffff;
+  color: #fff;
   border-top-right-radius: 4px;
 }
 
-/* Finch message */
 .chat-message.bot .chat-bubble {
   background: var(--bg-elevated);
   color: var(--ink);
@@ -433,63 +323,185 @@ document.addEventListener('DOMContentLoaded', function() {
   border-top-left-radius: 4px;
 }
 
-/* Input area */
-.chat-input-area {
+.chat-welcome strong {
+  display: block;
+  margin-bottom: .35rem;
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.chat-welcome p {
+  color: var(--ink-muted);
+  font-size: .82rem;
+}
+
+.chat-suggestions {
   display: flex;
-  gap: 0.5rem;
-  padding: 1rem;
-  border-top: 1px solid var(--line);
+  justify-content: center;
+  gap: .45rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.chat-suggestion {
+  padding: .5rem .7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
   background: var(--bg-elevated);
-}
-
-.chat-input-area .form-control {
-  flex: 1;
-}
-
-.chat-input-area button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.thinking-text {
   color: var(--ink-muted);
+  font-size: .75rem;
 }
 
-.dots {
+.chat-suggestion:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  margin-bottom: 1.75rem;
+  color: var(--ink);
+}
+
+.auth-brand:hover {
+  color: var(--ink);
+}
+
+  .auth-brand-mark {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    background: var(--brand-soft);
+    color: var(--brand-dark);
+    font-family: var(--display);
+    font-size: 1.2rem;
+    font-weight: 700;
+  }
+
+.auth-brand strong {
+  display: block;
+  font-family: var(--display);
+  font-size: 1.15rem;
+}
+
+.auth-brand small {
+  display: block;
+  margin-top: .1rem;
+  color: var(--ink-soft);
+  font-size: .68rem;
+}
+
+.auth-heading {
+  margin-bottom: 1.35rem;
+}
+
+.auth-submit {
+  margin-top: 1.25rem;
+}
+
+.auth-submit .btn {
+  width: 100%;
+}
+
+.auth-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+  margin-top: 1rem;
   color: var(--ink-muted);
-  animation: dots 1.5s steps(4, end) infinite;
+  font-size: .76rem;
+  text-align: center;
 }
 
-@keyframes dots {
+.otp-intro {
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-radius: 12px;
+  background: var(--bg-soft);
+  text-align: center;
+}
 
-  0%,
-  20% {
-    opacity: 0.25;
-  }
+.otp-icon {
+  margin-bottom: .5rem;
+  color: var(--brand);
+  font-size: 1.5rem;
+}
 
-  50% {
-    opacity: 0.7;
-  }
+.otp-intro p {
+  color: var(--ink-muted);
+  font-size: .82rem;
+}
 
-  100% {
-    opacity: 1;
-  }
+.otp-input {
+  font-size: 1.35rem;
+  letter-spacing: .45rem;
+  text-align: center;
+}
 
+.auth-text-button {
+  display: block;
+  margin: .9rem auto 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: .78rem;
+}
+
+.auth-text-button:hover {
+  color: var(--brand);
+}
+
+.admin-bypass {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+  color: var(--ink-muted);
+  font-size: .78rem;
+}
+
+.admin-bypass summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.admin-bypass form {
+  margin-top: .8rem;
+}
+
+.form-divider {
+  margin: 1.5rem 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+.form-section-title {
+  margin-bottom: 1rem;
+  font-family: var(--display);
+  font-size: 1.05rem;
+}
+
+.profile-card {
+  max-width: 600px;
 }
 
 @media (max-width: 600px) {
-
-  .ai-chat-panel {
-    height: calc(100vh - 180px);
-    min-height: 450px;
-  }
-
   .chat-bubble {
     max-width: 85%;
   }
 
-}
+  .chat-suggestions {
+    flex-direction: column;
+  }
 
+  .chat-suggestion {
+    width: 100%;
+  }
+}
 </style>
 
 {% endblock %}

@@ -1,37 +1,70 @@
 {% extends "base_auth.html" %}
-{% block title %}Sign in · SpendWise{% endblock %}
+
+{% block title %}Sign in · Finch{% endblock %}
 
 {% block content %}
-    <h1>Welcome back</h1>
-    <p class="subtitle">Sign in to manage expenses and budgets.</p>
-    
-    {% if messages %}
-      {% for message in messages %}
-        <div class="alert alert-{{ message.tags }}">{{ message }}</div>
-      {% endfor %}
-    {% endif %}
-    
-    <form method="post">
-      {% csrf_token %}
-      <div class="form-group">
-        <label for="username">Username</label>
-        <input class="form-control" type="text" id="username" name="username" placeholder="Username" required>
-      </div>
-      <div class="form-group">
-        <label for="password">Password</label>
-        <input class="form-control" type="password" id="password" name="password" placeholder="Password" required>
-      </div>
-      <div class="form-actions">
-        <button type="submit" class="btn btn-primary" style="width:100%">Sign in</button>
-      </div>
-    </form>
-    
-    <div class="text-center mt-3">
-      <small class="text-muted">
-        <i class="fas fa-shield-alt"></i> 
-        Email-based 2FA enabled.
-      </small>
+
+<div class="auth-heading">
+  <p class="eyebrow">Welcome back</p>
+  <h1>Sign in</h1>
+  <p class="subtitle">
+    Keep track of your money with Finch.
+  </p>
+</div>
+
+{% if messages %}
+  {% for message in messages %}
+    <div class="alert alert-{{ message.tags|default:'info' }}">
+      {{ message }}
     </div>
-    
-    <p class="auth-footer">New here? <a href="/signup/">Create an account</a></p>
+  {% endfor %}
+{% endif %}
+
+<form method="post">
+  {% csrf_token %}
+
+  <div class="form-group">
+    <label for="username">Username</label>
+    <input
+      class="form-control"
+      type="text"
+      id="username"
+      name="username"
+      placeholder="Your username"
+      autocomplete="username"
+      required
+      autofocus
+    >
+  </div>
+
+  <div class="form-group">
+    <label for="password">Password</label>
+    <input
+      class="form-control"
+      type="password"
+      id="password"
+      name="password"
+      placeholder="Your password"
+      autocomplete="current-password"
+      required
+    >
+  </div>
+
+  <div class="form-actions auth-submit">
+    <button type="submit" class="btn btn-primary">
+      Sign in
+    </button>
+  </div>
+</form>
+
+<div class="auth-note">
+  <span>✦</span>
+  Email-based two-factor authentication is enabled.
+</div>
+
+<p class="auth-footer">
+  New here?
+  <a href="{% url 'signup' %}">Create an account</a>
+</p>
+
 {% endblock %}

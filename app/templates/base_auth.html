@@ -1,20 +1,40 @@
 {% load static %}
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}SpendWise{% endblock %}</title>
-  <link rel="stylesheet" href="{% static 'css/style.css' %}">
-  <link rel="icon" href="{% static 'favicon.svg' %}" type="image/svg+xml">
+
+  <title>{% block title %}Finch{% endblock %}</title>
+
+  <link rel="stylesheet" href="{% static 'css/style.css' %}?v=4">
+  <link rel="icon" href="{% static 'img/Finch_icon.png' %}" type="image/png">
+
+  {% block extra_head %}{% endblock %}
 </head>
+
 <body>
+
 <div class="auth-page">
-  <div class="auth-card">
-    <div class="brand-mark">Spend<span>Wise</span></div>
+
+  <main class="auth-card">
+
+    <a class="auth-brand">
+      <span class="auth-brand-mark"></span>
+      <span>
+        <strong>Finch</strong>
+        <small>Small decisions, smarter finances.</small>
+      </span>
+    </a>
+
     {% block content %}{% endblock %}
-  </div>
+
+  </main>
+
 </div>
+
+{% block extra_scripts %}{% endblock %}
+
 </body>
 </html>

@@ -1,163 +1,116 @@
-{% load static %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Budgets · SpendWise</title>
-  <link rel="stylesheet" href="{% static 'css/style.css' %}">
-  <link rel="icon" href="{% static 'favicon.svg' %}" type="image/svg+xml">
-</head>
-<body>
-<div class="app-shell">
+{% extends "base.html" %}
 
-  <aside class="sidebar" id="sidebar">
-    <div class="logo">Spend<span>Wise</span></div>
+{% block title %}Budgets · Finch{% endblock %}
 
-    <nav class="nav-links">
-      <a href="{% url 'index' %}">Dashboard</a>
-      <a href="{% url 'expenses' %}">Expenses</a>
-      <a href="{% url 'income' %}">Income</a>
-      <a href="{% url 'budgets' %}" class="active">Budgets</a>
-      <a href="{% url 'categories' %}">Categories</a>
-      <a href="{% url 'reports' %}">Reports</a>
-    </nav>
+{% block content %}
+<div class="page-shell">
 
-    <div class="sidebar-user">
-      <strong>{{ request.user.username }}</strong>
-      <a href="{% url 'logout' %}">Sign out</a>
-    </div>
-  </aside>
-
-  <main class="main">
-
-    <!-- Messages -->
-    {% if messages %}
-      {% for message in messages %}
-        <div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>
-      {% endfor %}
-    {% endif %}
-
-    <div class="page-header">
-      <div>
-        <h1>📊 Budgets</h1>
-        <p>Set limits and track your spending progress</p>
-      </div>
-      <a href="{% url 'budget_form' %}" class="btn btn-primary">
-        ➕ Set Budget
-      </a>
+  <div class="page-intro">
+    <div class="page-intro-copy">
+      <p class="eyebrow">Money</p>
+      <h1>Budgets</h1>
+      <p>Give your spending a limit and keep an eye on progress.</p>
     </div>
 
-    <div class="panel">
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Category</th>
-              <th>Period</th>
-              <th>Budget</th>
-              <th>Spent</th>
-              <th>Progress</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in budget_rows %}
-            <tr>
-              <!-- Category -->
-              <td>
-                <span class="badge">
-                  <span class="badge-dot" style="background:{{ row.budget.category.color }}"></span>
+    <div class="page-intro-actions">
+      <a href="{% url 'budgets_export' %}" class="btn btn-ghost">Export CSV</a>
+      <a href="{% url 'budget_form' %}" class="btn btn-primary">Set budget</a>
+    </div>
+  </div>
+
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>
+    {% endfor %}
+  {% endif %}
+
+
+  {% if budget_rows %}
+    <div class="budget-grid">
+
+      {% for row in budget_rows %}
+        <article class="budget-card">
+
+          <div class="budget-card-top">
+            <div>
+              <div class="budget-card-category">
+                <span class="category-pill">
+                  <span
+                    class="category-pill-dot"
+                    style="background:{{ row.budget.category.color }}"
+                  ></span>
                   {{ row.budget.category.name }}
                 </span>
-              </td>
+              </div>
 
-              <!-- Period -->
-              <td>
+              <div class="budget-period">
                 {% if row.budget.period == 'monthly' %}
-                  {{ row.budget.month }}/{{ row.budget.year }}
-                  <div style="color:var(--ink-muted);font-size:.8rem">Monthly</div>
+                  Monthly · {{ row.budget.month }}/{{ row.budget.year }}
                 {% else %}
-                  {{ row.budget.year }}
-                  <div style="color:var(--ink-muted);font-size:.8rem">Yearly</div>
+                  Yearly · {{ row.budget.year }}
                 {% endif %}
-              </td>
+              </div>
+            </div>
 
-              <!-- Budget -->
-              <td>₹{{ row.budget.amount|floatformat:2 }}</td>
+            <strong>{{ row.percent }}%</strong>
+          </div>
 
-              <!-- Spent -->
-              <td class="amount{% if row.status == 'danger' %} expense{% endif %}">
-                ₹{{ row.spent|floatformat:2 }}
-              </td>
 
-              <!-- Progress -->
-              <td style="min-width:180px">
-                <div class="budget-meta" style="margin-bottom:.35rem">
-                  <span>{{ row.percent }}%</span>
-                  {% if row.remaining >= 0 %}
-                    <span style="color:var(--success);">₹{{ row.remaining|floatformat:2 }} left</span>
-                  {% else %}
-                    <span style="color:var(--danger);">₹{{ row.remaining|floatformat:2 }} over</span>
-                  {% endif %}
-                </div>
-                <div class="progress{% if row.status %} {{ row.status }}{% endif %}">
-                  <span style="width:{{ row.bar_width }}%"></span>
-                </div>
-              </td>
+          <div class="budget-card-amount">
+            ₹{{ row.spent|floatformat:2 }}
+            <small>of ₹{{ row.budget.amount|floatformat:2 }}</small>
+          </div>
 
-              <!-- Actions -->
-              <td class="actions">
-                <a href="{% url 'budget_edit' row.budget.pk %}" class="btn btn-ghost btn-sm">Edit</a>
-                <form method="post" action="{% url 'budget_delete' row.budget.pk %}" style="display:inline"
-                      onsubmit="return confirm('Delete this budget?');">
-                  {% csrf_token %}
-                  <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                </form>
-              </td>
-            </tr>
-            {% empty %}
-            <tr>
-              <td colspan="6" style="color:var(--ink-muted);text-align:center;padding:2rem;">
-                No budgets set yet. <a href="{% url 'budget_form' %}">Set one</a> to start tracking your spending.
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+
+          <div class="budget-card-meta">
+            <span class="left">{{ row.percent }}% used</span>
+
+            {% if row.remaining >= 0 %}
+              <span class="good">₹{{ row.remaining|floatformat:2 }} left</span>
+            {% else %}
+              <span class="bad">₹{{ row.remaining|floatformat:2 }} over</span>
+            {% endif %}
+          </div>
+
+
+          <div class="progress{% if row.status %} {{ row.status }}{% endif %}">
+            <span style="width:{{ row.bar_width }}%"></span>
+          </div>
+
+
+          <div class="budget-card-actions">
+            <a href="{% url 'budget_edit' row.budget.pk %}" class="btn btn-ghost btn-sm">
+              Edit
+            </a>
+
+            <form
+              method="post"
+              action="{% url 'budget_delete' row.budget.pk %}"
+              onsubmit="return confirm('Delete this budget?');"
+            >
+              {% csrf_token %}
+              <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+            </form>
+          </div>
+
+        </article>
+      {% endfor %}
+
+    </div>
+
+  {% else %}
+    <div class="panel">
+      <div class="empty-state">
+        <div class="table-empty-icon">%</div>
+        <strong>No budgets yet</strong>
+        <p>Create a budget for a category and Finch will track your progress automatically.</p>
+        <a href="{% url 'budget_form' %}" class="btn btn-primary btn-sm">
+          Create budget
+        </a>
       </div>
     </div>
+  {% endif %}
 
-    <!-- Pagination -->
-    {% if page_obj.has_other_pages %}
-    <div class="pagination" style="display:flex;justify-content:center;gap:0.5rem;padding:1rem 0;">
-      <span class="step-links">
-        {% if page_obj.has_previous %}
-          <a href="?page=1" class="btn btn-sm btn-secondary">&laquo; First</a>
-          <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-sm btn-secondary">Previous</a>
-        {% endif %}
-
-        <span class="current" style="padding:0 1rem;display:inline-flex;align-items:center;">
-          Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
-        </span>
-
-        {% if page_obj.has_next %}
-          <a href="?page={{ page_obj.next_page_number }}" class="btn btn-sm btn-secondary">Next</a>
-          <a href="?page={{ page_obj.paginator.num_pages }}" class="btn btn-sm btn-secondary">Last &raquo;</a>
-        {% endif %}
-      </span>
-    </div>
-    {% endif %}
-
-  </main>
 </div>
-
-<button class="mobile-toggle" id="menuToggle">☰</button>
-
-<script>
-document.getElementById('menuToggle').onclick = () =>
-  document.getElementById('sidebar').classList.toggle('open');
-</script>
-
-</body>
-</html>
+{% endblock %}

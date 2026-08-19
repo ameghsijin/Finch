@@ -1,78 +1,170 @@
 {% extends "base.html" %}
-{% load static %}
 
-{% block title %}{% if expense %}Edit Expense{% else %}Add Expense{% endif %} · SpendWise{% endblock %}
+{% block title %}
+  {% if expense %}Edit Expense{% else %}Add Expense{% endif %} · Finch
+{% endblock %}
 
 {% block content %}
-<div class="page-header">
-  <div>
-    <h1>{% if expense %}Edit Expense{% else %}Add Expense{% endif %}</h1>
-    <p>{% if expense %}Update your spending transaction{% else %}Record a spending transaction{% endif %}</p>
+<div class="page-shell">
+
+  <div class="page-intro">
+    <div class="page-intro-copy">
+      <p class="eyebrow">Money</p>
+
+      <h1>
+        {% if expense %}Edit expense{% else %}Add expense{% endif %}
+      </h1>
+
+      <p>
+        {% if expense %}
+          Update the details of this transaction.
+        {% else %}
+          Keep a clear record of where your money goes.
+        {% endif %}
+      </p>
+    </div>
   </div>
-</div>
 
-<div class="panel form-card">
-  <form method="post" novalidate>
-    {% csrf_token %}
-    
-    {% if form.non_field_errors %}
-    <div class="alert alert-danger">
-      {{ form.non_field_errors }}
+
+  <div class="panel form-card">
+
+    <div class="form-card-header">
+      <h2>Expense details</h2>
+      <p>Only the amount, title, and date are needed to get started.</p>
     </div>
-    {% endif %}
 
-    <div class="form-group">
-      <label for="{{ form.title.id_for_label }}">Title *</label>
-      {{ form.title }}
-      {% if form.title.errors %}
-      <div class="field-error">{{ form.title.errors }}</div>
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger">
+          {{ form.non_field_errors }}
+        </div>
       {% endif %}
-    </div>
 
-    <div class="form-group">
-      <label for="{{ form.amount.id_for_label }}">Amount (₹) *</label>
-      {{ form.amount }}
-      {% if form.amount.errors %}
-      <div class="field-error">{{ form.amount.errors }}</div>
-      {% endif %}
-    </div>
 
-    <div class="form-group">
-      <label for="{{ form.category.id_for_label }}">Category *</label>
-      {{ form.category }}
-      {% if form.category.errors %}
-      <div class="field-error">{{ form.category.errors }}</div>
-      {% endif %}
-    </div>
+      <div class="form-section">
 
-    <div class="form-group">
-      <label for="{{ form.date.id_for_label }}">Date *</label>
-      {{ form.date }}
-      {% if form.date.errors %}
-      <div class="field-error">{{ form.date.errors }}</div>
-      {% endif %}
-    </div>
+        <div class="form-section-title">
+          Basic information
+        </div>
 
-    <div class="form-group">
-      <label for="{{ form.payment_method.id_for_label }}">Payment Method</label>
-      {{ form.payment_method }}
-      {% if form.payment_method.errors %}
-      <div class="field-error">{{ form.payment_method.errors }}</div>
-      {% endif %}
-    </div>
+        <div class="form-grid">
 
-    <div class="form-group">
-      <label for="{{ form.notes.id_for_label }}">Notes</label>
-      {{ form.notes }}
-      {% if form.notes.errors %}
-      <div class="field-error">{{ form.notes.errors }}</div>
-      {% endif %}
-    </div>
+          <div class="form-field full">
+            <label for="{{ form.title.id_for_label }}">
+              Title <span class="field-required">*</span>
+            </label>
 
-    <div class="form-actions" style="display:flex;gap:0.5rem;margin-top:1.5rem;">
-      <button type="submit" class="btn btn-primary">💾 Save</button>
-      <a href="{% url 'expenses' %}" class="btn btn-ghost">Cancel</a>
-    </div>
-  </form>
+            {{ form.title }}
+
+            {% if form.title.errors %}
+              <div class="field-error">{{ form.title.errors }}</div>
+            {% endif %}
+          </div>
+
+
+          <div class="form-field amount-field">
+            <label for="{{ form.amount.id_for_label }}">
+              Amount <span class="field-required">*</span>
+            </label>
+
+            {{ form.amount }}
+
+            <small class="field-help">
+              Enter the amount in your account currency.
+            </small>
+
+            {% if form.amount.errors %}
+              <div class="field-error">{{ form.amount.errors }}</div>
+            {% endif %}
+          </div>
+
+
+          <div class="form-field">
+            <label for="{{ form.date.id_for_label }}">
+              Date <span class="field-required">*</span>
+            </label>
+
+            {{ form.date }}
+
+            {% if form.date.errors %}
+              <div class="field-error">{{ form.date.errors }}</div>
+            {% endif %}
+          </div>
+
+        </div>
+      </div>
+
+
+      <div class="form-section">
+
+        <div class="form-section-title">
+          Transaction
+        </div>
+
+        <div class="form-grid">
+
+          <div class="form-field">
+            <label for="{{ form.category.id_for_label }}">
+              Category
+            </label>
+
+            {{ form.category }}
+
+            {% if form.category.errors %}
+              <div class="field-error">{{ form.category.errors }}</div>
+            {% endif %}
+          </div>
+
+
+          <div class="form-field">
+            <label for="{{ form.payment_method.id_for_label }}">
+              Payment method
+            </label>
+
+            {{ form.payment_method }}
+
+            {% if form.payment_method.errors %}
+              <div class="field-error">{{ form.payment_method.errors }}</div>
+            {% endif %}
+          </div>
+
+
+          <div class="form-field full">
+            <label for="{{ form.notes.id_for_label }}">
+              Notes
+            </label>
+
+            {{ form.notes }}
+
+            <small class="field-help">
+              Optional. Add anything useful about this expense.
+            </small>
+
+            {% if form.notes.errors %}
+              <div class="field-error">{{ form.notes.errors }}</div>
+            {% endif %}
+          </div>
+
+        </div>
+      </div>
+
+
+      <div class="form-actions">
+        <a href="{% url 'expenses' %}" class="btn btn-ghost">
+          Cancel
+        </a>
+
+        <button type="submit" class="btn btn-primary">
+          {% if expense %}Save changes{% else %}Save expense{% endif %}
+        </button>
+      </div>
+
+    </form>
+
+  </div>
+
 </div>
 {% endblock %}

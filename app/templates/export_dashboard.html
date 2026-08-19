@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Export Data · SpendWise{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-download"></i> Export Data
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">
+                        Click the buttons below to download CSV files for each model.
+                        These are formatted correctly for Supabase import.
+                    </p>
+                    
+                    <div class="row mt-4">
+                        <!-- Categories -->
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="card h-100 border-primary">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-tags fa-3x text-primary"></i>
+                                    <h5 class="mt-2">Categories</h5>
+                                    <p class="text-muted small">{{ category_count }} records</p>
+                                    <a href="{% url 'export_categories_csv' %}" class="btn btn-primary btn-sm w-100">
+                                        <i class="fas fa-download"></i> Export CSV
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Expenses -->
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="card h-100 border-danger">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-arrow-up fa-3x text-danger"></i>
+                                    <h5 class="mt-2">Expenses</h5>
+                                    <p class="text-muted small">{{ expense_count }} records</p>
+                                    <a href="{% url 'export_expenses_csv' %}" class="btn btn-danger btn-sm w-100">
+                                        <i class="fas fa-download"></i> Export CSV
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Income -->
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="card h-100 border-success">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-arrow-down fa-3x text-success"></i>
+                                    <h5 class="mt-2">Income</h5>
+                                    <p class="text-muted small">{{ income_count }} records</p>
+                                    <a href="{% url 'export_income_csv' %}" class="btn btn-success btn-sm w-100">
+                                        <i class="fas fa-download"></i> Export CSV
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Budgets -->
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="card h-100 border-warning">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-piggy-bank fa-3x text-warning"></i>
+                                    <h5 class="mt-2">Budgets</h5>
+                                    <p class="text-muted small">{{ budget_count }} records</p>
+                                    <a href="{% url 'export_budgets_csv' %}" class="btn btn-warning btn-sm w-100">
+                                        <i class="fas fa-download"></i> Export CSV
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card border-info">
+                                <div class="card-body">
+                                    <h5><i class="fas fa-users text-info"></i> Users</h5>
+                                    <p class="text-muted small">{{ user_count }} records</p>
+                                    <a href="{% url 'export_users_csv' %}" class="btn btn-info btn-sm">
+                                        <i class="fas fa-download"></i> Export Users CSV
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card border-secondary">
+                                <div class="card-body">
+                                    <h5><i class="fas fa-file-archive text-secondary"></i> Full Backup</h5>
+                                    <p class="text-muted small">All data in one file</p>
+                                    <div class="btn-group">
+                                        <a href="{% url 'export_all_data_json' %}" class="btn btn-secondary btn-sm">
+                                            <i class="fas fa-download"></i> JSON
+                                        </a>
+                                        <a href="{% url 'export_all_data_combined_csv' %}" class="btn btn-outline-secondary btn-sm">
+                                            <i class="fas fa-download"></i> Combined CSV
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .card {
+        transition: transform 0.2s;
+    }
+    .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+</style>
+{% endblock %}

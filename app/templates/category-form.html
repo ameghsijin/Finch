@@ -1,53 +1,144 @@
 {% extends "base.html" %}
-{% block title %}{% if category %}Edit{% else %}Add{% endif %} Category · SpendWise{% endblock %}
+
+{% block title %}
+  {% if category %}Edit Category{% else %}Add Category{% endif %} · Finch
+{% endblock %}
 
 {% block content %}
-    <div class="page-header">
-      <div>
-        <h1>{% if category %}Edit Category{% else %}Add Category{% endif %}</h1>
-        <p>Customize how you group money</p>
+<div class="page-shell">
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags|default:'info' }}">
+        {{ message }}
       </div>
+    {% endfor %}
+  {% endif %}
+
+
+  <div class="page-intro">
+    <div class="page-intro-copy">
+      <p class="eyebrow">Organize</p>
+
+      <h1>
+        {% if category %}Edit category{% else %}Create a category{% endif %}
+      </h1>
+
+      <p>
+        Give your transactions a simple way to stay organized.
+      </p>
+    </div>
+  </div>
+
+
+  <div class="panel form-card">
+
+    <div class="form-card-header">
+      <h2>Category details</h2>
+      <p>Choose a name, purpose, color, and icon.</p>
     </div>
 
-    {% if messages %}
-      {% for message in messages %}
-        <div class="alert alert-warning">{{ message }}</div>
-      {% endfor %}
-    {% endif %}
 
-    <div class="panel form-card">
-      <form method="post">
-        {% csrf_token %}
-        <div class="form-group">
-          <label for="name">Name</label>
-          <input class="form-control" type="text" id="name" name="name"
-                 placeholder="e.g. Groceries" value="{{ category.name|default:'' }}" required>
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger">
+          {{ form.non_field_errors }}
         </div>
-        <div class="form-group">
-          <label for="type">Type</label>
-          <select class="form-control" id="type" name="type">
-            {% for value, label in type_choices %}
-            <option value="{{ value }}" {% if category.type == value %}selected{% elif not category and value == 'expense' %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
+      {% endif %}
+
+
+      <div class="form-section">
+
+        <div class="form-section-title">
+          Category
         </div>
-        <div class="form-group">
-          <label for="color">Color</label>
-          <input class="form-control" type="color" id="color" name="color"
-                 value="{{ category.color|default:'#0F766E' }}">
+
+        <div class="form-grid">
+
+          <div class="form-field full">
+            <label for="{{ form.name.id_for_label }}">
+              Name <span class="field-required">*</span>
+            </label>
+
+            {{ form.name }}
+
+            <small class="field-help">
+              Example: Food, Transport, Salary, Shopping.
+            </small>
+
+            {% if form.name.errors %}
+              <div class="field-error">{{ form.name.errors }}</div>
+            {% endif %}
+          </div>
+
+
+          <div class="form-field">
+            <label for="{{ form.type.id_for_label }}">
+              Type <span class="field-required">*</span>
+            </label>
+
+            {{ form.type }}
+
+            {% if form.type.errors %}
+              <div class="field-error">{{ form.type.errors }}</div>
+            {% endif %}
+          </div>
+
+
+          <div class="form-field">
+            <label for="{{ form.icon.id_for_label }}">
+              Icon
+            </label>
+
+            {{ form.icon }}
+
+            {% if form.icon.errors %}
+              <div class="field-error">{{ form.icon.errors }}</div>
+            {% endif %}
+          </div>
+
+
+          <div class="form-field full">
+
+            <label for="{{ form.color.id_for_label }}">
+              Color
+            </label>
+
+            <div class="color-field">
+              {{ form.color }}
+
+              <div class="form-summary">
+                <span>Category color</span>
+                <strong>●</strong>
+              </div>
+            </div>
+
+            {% if form.color.errors %}
+              <div class="field-error">{{ form.color.errors }}</div>
+            {% endif %}
+
+          </div>
+
         </div>
-        <div class="form-group">
-          <label for="icon">Icon</label>
-          <select class="form-control" id="icon" name="icon">
-            {% for value, label in icon_choices %}
-            <option value="{{ value }}" {% if category.icon == value %}selected{% elif not category and value == 'Tag' %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="form-actions">
-          <button type="submit" class="btn btn-primary">Save</button>
-          <a href="{% url 'categories' %}" class="btn btn-ghost">Cancel</a>
-        </div>
-      </form>
-    </div>
+
+      </div>
+
+
+      <div class="form-actions">
+        <a href="{% url 'categories' %}" class="btn btn-ghost">
+          Cancel
+        </a>
+
+        <button type="submit" class="btn btn-primary">
+          {% if category %}Save changes{% else %}Save category{% endif %}
+        </button>
+      </div>
+
+    </form>
+
+  </div>
+
+</div>
 {% endblock %}

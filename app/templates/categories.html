@@ -1,44 +1,80 @@
 {% extends "base.html" %}
-{% block title %}Categories · SpendWise{% endblock %}
+
+{% block title %}Categories · Finch{% endblock %}
 
 {% block content %}
-    <div class="page-header">
-      <div>
-        <h1>Categories</h1>
-        <p>Organize income and expenses</p>
-      </div>
-      <a href="{% url 'category_form' %}" class="btn btn-primary">+ Add category</a>
+<div class="page-shell">
+
+  <div class="page-intro">
+    <div class="page-intro-copy">
+      <p class="eyebrow">Organize</p>
+      <h1>Categories</h1>
+      <p>Give your money a little more structure.</p>
     </div>
 
-    {% if messages %}
-      {% for message in messages %}
-        <div class="alert alert-warning">{{ message }}</div>
-      {% endfor %}
-    {% endif %}
+    <div class="page-intro-actions">
+      <a href="{% url 'category_form' %}" class="btn btn-primary">
+        Add category
+      </a>
+    </div>
+  </div>
 
-    {% if categories %}
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>
+    {% endfor %}
+  {% endif %}
+
+
+  {% if categories %}
     <div class="category-grid">
+
       {% for category in categories %}
-      <div class="category-tile">
-        <div class="top">
-          <div class="swatch" style="background:{{ category.color }}"></div>
-          <div class="actions">
-            <a href="{% url 'category_edit' category.pk %}" class="btn btn-ghost btn-sm">Edit</a>
-            <form method="post" action="{% url 'category_delete' category.pk %}" style="display:inline"
-                  onsubmit="return confirm('Delete this category?');">
-              {% csrf_token %}
-              <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-            </form>
+        <article class="category-tile">
+
+          <div class="top">
+            <div
+              class="category-swatch"
+              style="background:{{ category.color }}"
+            ></div>
+
+            <div class="category-actions">
+              <a href="{% url 'category_edit' category.pk %}" class="btn btn-ghost btn-sm">
+                Edit
+              </a>
+
+              <form
+                method="post"
+                action="{% url 'category_delete' category.pk %}"
+                onsubmit="return confirm('Delete this category?');"
+              >
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+              </form>
+            </div>
           </div>
-        </div>
-        <strong>{{ category.name }}</strong>
-        <div style="color:var(--ink-muted);font-size:.9rem;margin-top:.25rem">{{ category.get_type_display }}</div>
-      </div>
+
+          <span class="category-name">{{ category.name }}</span>
+          <span class="category-type">{{ category.get_type_display }}</span>
+
+        </article>
       {% endfor %}
+
     </div>
-    {% else %}
+
+  {% else %}
     <div class="panel">
-      <p style="color:var(--ink-muted);margin:0">No categories yet. Add one to get started.</p>
+      <div class="empty-state">
+        <div class="table-empty-icon">◈</div>
+        <strong>No categories yet</strong>
+        <p>Create categories to make your expenses and income easier to understand.</p>
+        <a href="{% url 'category_form' %}" class="btn btn-primary btn-sm">
+          Add category
+        </a>
+      </div>
     </div>
-    {% endif %}
+  {% endif %}
+
+</div>
 {% endblock %}

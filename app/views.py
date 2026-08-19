@@ -24,6 +24,8 @@ from celery.result import AsyncResult
 import os
 import logging
 from django.contrib.auth.decorators import user_passes_test
+from .models import Category, Expense, Income, Budget
+
 # ============ 2FA BYPASS CONFIGURATION ============
 logger = logging.getLogger(__name__)
 
@@ -732,7 +734,6 @@ def mfa_login(request):
         # ===== NORMAL OTP VERIFICATION =====
         if 'send_code' in request.POST:
             _generate_and_send_otp(user)
-            messages.info(request, f'Code sent to {user.email}')
             return render(request, 'mfa_login.html', {
                 'email': user.email,
                 'step': 'verify',
@@ -997,3 +998,5 @@ def profile(request):
         'active_page': 'profile',
         'user': user,
     })
+
+

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="stats-grid">
+    <div class="card stat-card">
+        <div class="label">💰 Total Balance</div>
+        <div class="number">$12,450.00</div>
+        <span class="change up">↑ 12.5% from last month</span>
+    </div>
+    <div class="card stat-card">
+        <div class="label">📈 Income</div>
+        <div class="number">$8,200</div>
+        <span class="change up">↑ 8.2%</span>
+    </div>
+    <div class="card stat-card">
+        <div class="label">💸 Expenses</div>
+        <div class="number">$4,250</div>
+        <span class="change down">↓ 3.1%</span>
+    </div>
+    <div class="card stat-card">
+        <div class="label">🎯 Budget Used</div>
+        <div class="number">68%</div>
+        <div class="progress-track"><div class="fill primary" style="width:68%;"></div></div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <!-- Recent Transactions -->
+    <div class="card">
+        <div class="flex-between mb-3">
+            <strong>📋 Recent Transactions</strong>
+            <a href="{% url 'expenses' %}" style="color:var(--text-muted);font-size:0.8rem;">View all →</a>
+        </div>
+        <div class="tx-item">
+            <div class="icon orange"><i class="bi bi-cup-hot"></i></div>
+            <div class="info"><div class="title">Coffee Shop</div><div class="meta">Today, 11:30 AM</div></div>
+            <div class="amount negative">-$4.50</div>
+        </div>
+        <div class="tx-item">
+            <div class="icon blue"><i class="bi bi-bag"></i></div>
+            <div class="info"><div class="title">Weekly Groceries</div><div class="meta">Yesterday, 4:15 PM</div></div>
+            <div class="amount negative">-$68.20</div>
+        </div>
+        <div class="tx-item">
+            <div class="icon green"><i class="bi bi-bus-front"></i></div>
+            <div class="info"><div class="title">Bus Pass</div><div class="meta">Yesterday, 9:00 AM</div></div>
+            <div class="amount negative">-$45.00</div>
+        </div>
+        <div class="tx-item">
+            <div class="icon pink"><i class="bi bi-film"></i></div>
+            <div class="info"><div class="title">Netflix Subscription</div><div class="meta">2 days ago</div></div>
+            <div class="amount negative">-$15.99</div>
+        </div>
+    </div>
+
+    <!-- Quick Actions & Budget -->
+    <div>
+        <div class="card mb-3">
+            <strong>📊 Budget Progress</strong>
+            <div style="margin-top:12px;">
+                <div class="flex-between"><span>Food</span><span>$320 / $400</span></div>
+                <div class="progress-track"><div class="fill success" style="width:80%;"></div></div>
+                <div class="flex-between" style="margin-top:8px;"><span>Shopping</span><span>$180 / $200</span></div>
+                <div class="progress-track"><div class="fill warning" style="width:90%;"></div></div>
+                <div class="flex-between" style="margin-top:8px;"><span>Transport</span><span>$110 / $150</span></div>
+                <div class="progress-track"><div class="fill primary" style="width:73%;"></div></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <strong>⚡ Quick Actions</strong>
+            <div class="quick-grid">
+                <a href="#" class="quick-btn"><i class="bi bi-plus-circle"></i> Expense</a>
+                <a href="#" class="quick-btn"><i class="bi bi-arrow-down-circle"></i> Income</a>
+                <a href="#" class="quick-btn"><i class="bi bi-piggy-bank"></i> Budget</a>
+                <a href="#" class="quick-btn"><i class="bi bi-robot"></i> AI</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

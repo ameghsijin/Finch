@@ -4,40 +4,119 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}SpendWise{% endblock %}</title>
-  <link rel="stylesheet" href="{% static 'css/style.css' %}">
-  <link rel="icon" href="{% static 'favicon.svg' %}" type="image/svg+xml">
+  <title>{% block title %}Finch · Small decisions, smarter finances.{% endblock %}</title>
+
+  <link rel="stylesheet" href="{% static 'css/style.css' %}?v=4">
+  <link rel="icon" href="{% static 'img/Finch_icon.png' %}" type="image/png">
+
   {% block extra_head %}{% endblock %}
 </head>
+
 <body>
 <div class="app-shell">
+
   <aside class="sidebar" id="sidebar">
-    <div class="logo">Spend<span>Wise</span></div>
+
+    <a href="{% url 'index' %}" class="brand">
+      <span class="finch-mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" fill="none">
+          <circle cx="16" cy="16" r="15"></circle>
+          <path
+            d="M9 17.2c2.1-4.3 5.7-6.8 10.2-6.8 2.1 0 3.7.4 5 1.2-1.1.3-2.1 1-2.8 1.9 1.2.4 2.3 1.1 3.1 2.1-2.2 3.4-5.3 5.2-9.2 5.2-1.6 0-3.1-.3-4.5-1L9 22.5c-.8-.8-1-1.8-.7-2.7-1.1-.8-1.5-1.7-1.3-2.6.2-.1.7-.1 1 0Z"
+            fill="currentColor"
+          />
+          <circle cx="20.5" cy="13.2" r="1" fill="white"></circle>
+        </svg>
+      </span>
+      <span class="brand-name">Finch</span>
+    </a>
+
     <nav class="nav-links">
-      <a href="{% url 'index' %}" {% if active_page == 'dashboard' %}class="active"{% endif %}>Dashboard</a>
-      <a href="{% url 'expenses' %}" {% if active_page == 'expenses' %}class="active"{% endif %}>Expenses</a>
-      <a href="{% url 'income' %}" {% if active_page == 'income' %}class="active"{% endif %}>Income</a>
-      <a href="{% url 'budgets' %}" {% if active_page == 'budgets' %}class="active"{% endif %}>Budgets</a>
-      <a href="{% url 'categories' %}" {% if active_page == 'categories' %}class="active"{% endif %}>Categories</a>
-      <a href="{% url 'reports' %}" {% if active_page == 'reports' %}class="active"{% endif %}>Reports</a>
-      <a href="{% url 'ai_assistant' %}" {% if active_page == 'ai_assistant' %}class="active"{% endif %}>AI Assistant</a>
+
+      <div class="nav-section">
+        <span class="nav-section-label">Overview</span>
+
+        <a href="{% url 'index' %}" {% if active_page == 'dashboard' %}class="active"{% endif %}>
+          <span class="nav-icon">⌂</span>
+          <span>Dashboard</span>
+        </a>
+      </div>
+
+      <div class="nav-section">
+        <span class="nav-section-label">Money</span>
+
+        <a href="{% url 'expenses' %}" {% if active_page == 'expenses' %}class="active"{% endif %}>
+          <span class="nav-icon">−</span>
+          <span>Expenses</span>
+        </a>
+
+        <a href="{% url 'income' %}" {% if active_page == 'income' %}class="active"{% endif %}>
+          <span class="nav-icon">+</span>
+          <span>Income</span>
+        </a>
+
+        <a href="{% url 'budgets' %}" {% if active_page == 'budgets' %}class="active"{% endif %}>
+          <span class="nav-icon">◒</span>
+          <span>Budgets</span>
+        </a>
+
+        <a href="{% url 'categories' %}" {% if active_page == 'categories' %}class="active"{% endif %}>
+          <span class="nav-icon">◈</span>
+          <span>Categories</span>
+        </a>
+      </div>
+
+      <div class="nav-section">
+        <span class="nav-section-label">Insights</span>
+
+        <a href="{% url 'reports' %}" {% if active_page == 'reports' %}class="active"{% endif %}>
+          <span class="nav-icon">↗</span>
+          <span>Reports</span>
+        </a>
+
+        <a href="{% url 'ai_assistant' %}" {% if active_page == 'ai_assistant' %}class="active"{% endif %}>
+          <span class="nav-icon">✦</span>
+          <span>Ask Finch</span>
+        </a>
+      </div>
+
     </nav>
-    <div class="sidebar-user">
-      <a href="{% url 'profile' %}" style="color:inherit;text-decoration:none;">
-        <strong>{{ request.user.username }}</strong>
+
+    <div class="sidebar-footer">
+      <a href="{% url 'profile' %}" class="sidebar-user">
+        <span class="avatar">{{ request.user.username|first|upper }}</span>
+
+        <span class="sidebar-user-info">
+          <strong>{{ request.user.username }}</strong>
+          <small>Profile</small>
+        </span>
       </a>
-      <a href="{% url 'logout' %}">Sign out</a>
+
+      <a href="{% url 'logout' %}" class="sign-out">Sign out</a>
     </div>
+
   </aside>
+
   {% include 'cookie_banner.html' %}
+
   <main class="main">
     {% block content %}{% endblock %}
   </main>
 </div>
-<button class="mobile-toggle" id="menuToggle" aria-label="Toggle menu">☰</button>
+
+<button class="mobile-toggle" id="menuToggle" aria-label="Toggle navigation" type="button">☰</button>
+
 <script>
-document.getElementById('menuToggle').onclick = () => document.getElementById('sidebar').classList.toggle('open');
+document.addEventListener("DOMContentLoaded", () => {
+  const toggle = document.getElementById("menuToggle");
+  const sidebar = document.getElementById("sidebar");
+
+  if (toggle && sidebar) {
+    toggle.addEventListener("click", () => sidebar.classList.toggle("open"));
+  }
+});
 </script>
+
 {% block extra_scripts %}{% endblock %}
 </body>
 </html>

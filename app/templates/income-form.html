@@ -1,70 +1,165 @@
 {% extends "base.html" %}
-{% load static %}
 
-{% block title %}{% if income %}Edit Income{% else %}Add Income{% endif %} · SpendWise{% endblock %}
+{% block title %}
+  {% if income %}Edit Income{% else %}Add Income{% endif %} · Finch
+{% endblock %}
 
 {% block content %}
-<div class="page-header">
-  <div>
-    <h1>{% if income %}Edit Income{% else %}Add Income{% endif %}</h1>
-    <p>{% if income %}Update your income entry{% else %}Record money coming in{% endif %}</p>
+<div class="page-shell">
+
+  <div class="page-intro">
+    <div class="page-intro-copy">
+      <p class="eyebrow">Money</p>
+
+      <h1>
+        {% if income %}Edit income{% else %}Add income{% endif %}
+      </h1>
+
+      <p>
+        {% if income %}
+          Update the details of this income entry.
+        {% else %}
+          Keep track of money coming into your account.
+        {% endif %}
+      </p>
+    </div>
   </div>
-</div>
 
-<div class="panel form-card">
-  <form method="post" novalidate>
-    {% csrf_token %}
-    
-    {% if form.non_field_errors %}
-    <div class="alert alert-danger">
-      {{ form.non_field_errors }}
+
+  <div class="panel form-card">
+
+    <div class="form-card-header">
+      <h2>Income details</h2>
+      <p>Record where the money came from and when you received it.</p>
     </div>
-    {% endif %}
 
-    <div class="form-group">
-      <label for="{{ form.title.id_for_label }}">Title *</label>
-      {{ form.title }}
-      {% if form.title.errors %}
-      <div class="field-error">{{ form.title.errors }}</div>
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger">
+          {{ form.non_field_errors }}
+        </div>
       {% endif %}
-    </div>
 
-    <div class="form-group">
-      <label for="{{ form.amount.id_for_label }}">Amount (₹) *</label>
-      {{ form.amount }}
-      {% if form.amount.errors %}
-      <div class="field-error">{{ form.amount.errors }}</div>
-      {% endif %}
-    </div>
 
-    <div class="form-group">
-      <label for="{{ form.category.id_for_label }}">Category *</label>
-      {{ form.category }}
-      {% if form.category.errors %}
-      <div class="field-error">{{ form.category.errors }}</div>
-      {% endif %}
-    </div>
+      <div class="form-section">
 
-    <div class="form-group">
-      <label for="{{ form.date.id_for_label }}">Date *</label>
-      {{ form.date }}
-      {% if form.date.errors %}
-      <div class="field-error">{{ form.date.errors }}</div>
-      {% endif %}
-    </div>
+        <div class="form-section-title">
+          Basic information
+        </div>
 
-    <div class="form-group">
-      <label for="{{ form.notes.id_for_label }}">Notes</label>
-      {{ form.notes }}
-      {% if form.notes.errors %}
-      <div class="field-error">{{ form.notes.errors }}</div>
-      {% endif %}
-    </div>
+        <div class="form-grid">
 
-    <div class="form-actions" style="display:flex;gap:0.5rem;margin-top:1.5rem;">
-      <button type="submit" class="btn btn-primary">💾 Save</button>
-      <a href="{% url 'income' %}" class="btn btn-ghost">Cancel</a>
-    </div>
-  </form>
+          <div class="form-field full">
+            <label for="{{ form.title.id_for_label }}">
+              Title <span class="field-required">*</span>
+            </label>
+
+            {{ form.title }}
+
+            {% if form.title.errors %}
+              <div class="field-error">{{ form.title.errors }}</div>
+            {% endif %}
+          </div>
+
+
+          <div class="form-field amount-field">
+            <label for="{{ form.amount.id_for_label }}">
+              Amount <span class="field-required">*</span>
+            </label>
+
+            {{ form.amount }}
+
+            {% if form.amount.errors %}
+              <div class="field-error">{{ form.amount.errors }}</div>
+            {% endif %}
+          </div>
+
+
+          <div class="form-field">
+            <label for="{{ form.date.id_for_label }}">
+              Date <span class="field-required">*</span>
+            </label>
+
+            {{ form.date }}
+
+            {% if form.date.errors %}
+              <div class="field-error">{{ form.date.errors }}</div>
+            {% endif %}
+          </div>
+
+        </div>
+      </div>
+
+
+      <div class="form-section">
+
+        <div class="form-section-title">
+          Details
+        </div>
+
+        <div class="form-grid">
+
+          <div class="form-field">
+            <label for="{{ form.category.id_for_label }}">
+              Category
+            </label>
+
+            {{ form.category }}
+
+            {% if form.category.errors %}
+              <div class="field-error">{{ form.category.errors }}</div>
+            {% endif %}
+          </div>
+
+
+          <div class="form-field">
+            <label>
+              Source
+            </label>
+
+            <div class="form-summary">
+              <span>Income entry</span>
+              <strong>+</strong>
+            </div>
+          </div>
+
+
+          <div class="form-field full">
+            <label for="{{ form.notes.id_for_label }}">
+              Notes
+            </label>
+
+            {{ form.notes }}
+
+            <small class="field-help">
+              Optional. Add any useful details about this income.
+            </small>
+
+            {% if form.notes.errors %}
+              <div class="field-error">{{ form.notes.errors }}</div>
+            {% endif %}
+          </div>
+
+        </div>
+      </div>
+
+
+      <div class="form-actions">
+        <a href="{% url 'income' %}" class="btn btn-ghost">
+          Cancel
+        </a>
+
+        <button type="submit" class="btn btn-primary">
+          {% if income %}Save changes{% else %}Save income{% endif %}
+        </button>
+      </div>
+
+    </form>
+
+  </div>
+
 </div>
 {% endblock %}

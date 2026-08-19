@@ -1,148 +1,101 @@
+{% extends "base.html" %}
 {% load static %}
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Reports · SpendWise</title>
-  <link rel="stylesheet" href="{% static 'css/style.css' %}">
-</head>
+{% block title %}Reports · Finch{% endblock %}
 
-<body>
+{% block content %}
+<div class="page-shell">
 
-<div class="app-shell">
-
-  <aside class="sidebar">
-    <div class="logo">Spend<span>Wise</span></div>
-
-    <nav class="nav-links">
-      <a href="/">Dashboard</a>
-      <a href="/expenses/">Expenses</a>
-      <a href="/income/">Income</a>
-      <a href="/budget/">Budgets</a>
-      <a href="/categories/">Categories</a>
-      <a href="/reports/" class="active">Reports</a>
-    </nav>
-
-    <div class="sidebar-user">
-      <strong>{{ request.user.username }}</strong>
-      <a href="/logout/">Sign out</a>
+  <div class="page-intro">
+    <div class="page-intro-copy">
+      <p class="eyebrow">Insights</p>
+      <h1>Reports</h1>
+      <p>See the bigger picture behind your money.</p>
     </div>
-  </aside>
+  </div>
 
 
-  <main class="main">
+  <form method="get" class="page-filter panel report-filter">
 
-    <div class="page-header">
-      <div>
-        <h1>Reports</h1>
-        <p>Analyze spending patterns</p>
-      </div>
+    <div class="filter-field">
+      <label for="year">Year</label>
+      <select name="year" id="year" class="form-control">
+        {% for y in years %}
+          <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+      </select>
     </div>
 
+    <div class="filter-field">
+      <label for="month">Month</label>
+      <select name="month" id="month" class="form-control">
+        <option value="" {% if not month %}selected{% endif %}>Full year</option>
 
-    <!-- Filters -->
-    <form method="get" class="filter-bar panel"
-          style="grid-template-columns:1fr 1fr auto">
-
-      <div class="form-group" style="margin:0">
-        <label>Year</label>
-
-        <select name="year" class="form-control">
-          {% for y in years %}
-            <option value="{{ y }}"
-              {% if y == year %}selected{% endif %}>
-              {{ y }}
-            </option>
-          {% endfor %}
-        </select>
-      </div>
-
-
-      <div class="form-group" style="margin:0">
-        <label>Month</label>
-
-        <select name="month" class="form-control">
-
-          <option value=""
-            {% if not month %}selected{% endif %}>
-            Full year
+        {% for number, name in months %}
+          <option value="{{ number }}" {% if number == month %}selected{% endif %}>
+            {{ name }}
           </option>
-
-          {% for number, name in months %}
-            <option value="{{ number }}"
-              {% if number == month %}selected{% endif %}>
-              {{ name }}
-            </option>
-          {% endfor %}
-
-        </select>
-      </div>
-
-
-      <button type="submit" class="btn btn-secondary">
-        Apply
-      </button>
-
-    </form>
-
-
-    <!-- Totals -->
-    <div class="stats-grid"
-         style="grid-template-columns:repeat(3,1fr)">
-
-      <div class="stat income">
-        <div class="label">Total income</div>
-        <div class="value">
-          ₹{{ income_total|floatformat:2 }}
-        </div>
-      </div>
-
-      <div class="stat expense">
-        <div class="label">Total expenses</div>
-        <div class="value">
-          ₹{{ expense_total|floatformat:2 }}
-        </div>
-      </div>
-
-      <div class="stat balance">
-        <div class="label">Net</div>
-        <div class="value">
-          ₹{{ net|floatformat:2 }}
-        </div>
-      </div>
-
+        {% endfor %}
+      </select>
     </div>
 
+    <button type="submit" class="btn btn-secondary">Update report</button>
+  </form>
 
-    <!-- Charts -->
-    <div class="grid-2">
 
-      <div class="panel">
-        <h2>{{ trend_title }}</h2>
-        <div class="chart-box">
-          <canvas id="dailyChart"></canvas>
-        </div>
-      </div>
-
-      <div class="panel">
-        <h2>Category breakdown</h2>
-        <div class="chart-box">
-          <canvas id="reportCatChart"></canvas>
-        </div>
-      </div>
-
+  <div class="summary-strip report-summary">
+    <div class="summary-item">
+      <span class="summary-item-label">Income</span>
+      <strong class="summary-item-value income">₹{{ income_total|floatformat:2 }}</strong>
     </div>
 
+    <div class="summary-item">
+      <span class="summary-item-label">Expenses</span>
+      <strong class="summary-item-value expense">₹{{ expense_total|floatformat:2 }}</strong>
+    </div>
 
-    <!-- Tables -->
-    <div class="grid-2">
+    <div class="summary-item">
+      <span class="summary-item-label">Net</span>
+      <strong class="summary-item-value {% if net < 0 %}expense{% else %}brand{% endif %}">
+        ₹{{ net|floatformat:2 }}
+      </strong>
+    </div>
+  </div>
 
-      <div class="panel">
-        <h2>By category</h2>
 
-        <table>
+  <div class="report-grid">
+
+    <article class="report-card">
+      <h2>{{ trend_title }}</h2>
+      <p>Your spending trend for the selected period.</p>
+      <div class="report-chart">
+        <canvas id="dailyChart"></canvas>
+      </div>
+    </article>
+
+    <article class="report-card">
+      <h2>Category breakdown</h2>
+      <p>How your spending is distributed.</p>
+      <div class="report-chart">
+        <canvas id="reportCatChart"></canvas>
+      </div>
+    </article>
+
+  </div>
+
+
+  <div class="report-tables">
+
+    <article class="dashboard-card report-table-card">
+      <div class="data-panel-head">
+        <div>
+          <h2>By category</h2>
+          <p>Your biggest spending categories.</p>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="fin-table">
           <thead>
             <tr>
               <th>Category</th>
@@ -153,25 +106,42 @@
           <tbody>
             {% for row in category_rows %}
               <tr>
-                <td>{{ row.name }}</td>
+                <td>
+                  <span class="category-pill">
+                    <span
+                      class="category-pill-dot"
+                      style="background:{{ row.color }}"
+                    ></span>
+                    {{ row.name }}
+                  </span>
+                </td>
+
                 <td class="amount expense">
                   ₹{{ row.total|floatformat:2 }}
                 </td>
               </tr>
+
             {% empty %}
               <tr>
-                <td colspan="2">No expenses found.</td>
+                <td colspan="2" class="table-empty">No expenses found for this period.</td>
               </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
+    </article>
 
 
-      <div class="panel">
-        <h2>By payment method</h2>
+    <article class="dashboard-card report-table-card">
+      <div class="data-panel-head">
+        <div>
+          <h2>By payment method</h2>
+          <p>Where your spending is being paid from.</p>
+        </div>
+      </div>
 
-        <table>
+      <div class="table-wrap">
+        <table class="fin-table">
           <thead>
             <tr>
               <th>Method</th>
@@ -183,71 +153,98 @@
             {% for row in payment_rows %}
               <tr>
                 <td>{{ row.payment_method|default:"Unknown"|title }}</td>
-                <td class="amount expense">
-                  ₹{{ row.total|floatformat:2 }}
-                </td>
+                <td class="amount expense">₹{{ row.total|floatformat:2 }}</td>
               </tr>
+
             {% empty %}
               <tr>
-                <td colspan="2">No payments found.</td>
+                <td colspan="2" class="table-empty">No payments found for this period.</td>
               </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
+    </article>
 
-    </div>
-
-  </main>
+  </div>
 
 </div>
+{% endblock %}
 
 
+{% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
 <script>
-new Chart(document.getElementById('dailyChart'), {
-  type: 'line',
-  data: {
-    labels: {{ trend_labels|safe }},
-    datasets: [{
-      label: '{{ trend_title }}',
-      data: {{ trend_values|safe }},
-      borderColor: '#0f766e',
-      backgroundColor: 'rgba(15,118,110,0.12)',
-      fill: true,
-      tension: 0.3
-    }]
-  },
-  options: {
-    responsive: true,
-    maintainAspectRatio: false,
-    scales: {
-      y: { beginAtZero: true }
-    }
+document.addEventListener("DOMContentLoaded", () => {
+  const daily = document.getElementById("dailyChart");
+  const category = document.getElementById("reportCatChart");
+
+  if (daily) {
+    new Chart(daily, {
+      type:"line",
+      data:{
+        labels:{{ trend_labels|safe }},
+        datasets:[{
+          label:"Spending",
+          data:{{ trend_values|safe }},
+          borderColor:"#0f766e",
+          backgroundColor:"rgba(15,118,110,.08)",
+          fill:true,
+          tension:.35,
+          pointRadius:2,
+          pointHoverRadius:5
+        }]
+      },
+      options:{
+        responsive:true,
+        maintainAspectRatio:false,
+        interaction:{intersect:false,mode:"index"},
+        scales:{
+          x:{
+            grid:{display:false},
+            ticks:{color:"#7a8982"}
+          },
+          y:{
+            beginAtZero:true,
+            grid:{color:"#edf1ef"},
+            ticks:{color:"#7a8982"}
+          }
+        },
+        plugins:{legend:{display:false}}
+      }
+    });
   }
-});
 
-
-new Chart(document.getElementById('reportCatChart'), {
-  type: 'pie',
-  data: {
-    labels: {{ cat_labels|safe }},
-    datasets: [{
-      data: {{ cat_values|safe }},
-      backgroundColor: {{ cat_colors|safe }},
-      borderWidth: 0
-    }]
-  },
-  options: {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { position: 'bottom' }
-    }
+  if (category) {
+    new Chart(category, {
+      type:"doughnut",
+      data:{
+        labels:{{ cat_labels|safe }},
+        datasets:[{
+          data:{{ cat_values|safe }},
+          backgroundColor:{{ cat_colors|safe }},
+          borderWidth:0,
+          hoverOffset:5
+        }]
+      },
+      options:{
+        responsive:true,
+        maintainAspectRatio:false,
+        cutout:"65%",
+        plugins:{
+          legend:{
+            position:"bottom",
+            labels:{
+              usePointStyle:true,
+              padding:16,
+              color:"#5c6b64"
+            }
+          }
+        }
+      }
+    });
   }
 });
 </script>
-
-</body>
-</html>
+{% endblock %}
