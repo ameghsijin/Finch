@@ -161,28 +161,33 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 
-# ============ EMAIL CONFIGURATION (Zoho Mail) ============
+# ============ EMAIL CONFIGURATION ============
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
-# Email backend for Zoho Mail
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# Check if running on Render (free tier blocks SMTP)
+import os
 
-# Zoho Mail SMTP Settings
-EMAIL_HOST = 'smtp.zoho.in'  # Use 'smtp.zoho.in' for Zoho India
-EMAIL_PORT = 587  # TLS port
-EMAIL_USE_TLS = True
-EMAIL_USE_SSL = False
-
-# Your Zoho Mail credentials
-EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
-DEFAULT_FROM_EMAIL = 'ameghsijin@zohomail.in'  # Same as EMAIL_HOST_USER
+if os.getenv("RENDER"):  # Render sets this environment variable automatically
+    # On Render free tier - use console backend (prints emails to logs)
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+    print("📧 Using console email backend on Render")
+else:
+    # Local development or production with SMTP
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    
+    # Zoho Mail SMTP Settings
+    EMAIL_HOST = 'smtp.zoho.in'  # Use 'smtp.zoho.in' for Zoho India
+    EMAIL_PORT = 587  # TLS port
+    EMAIL_USE_TLS = True
+    EMAIL_USE_SSL = False
+    
+    # Your Zoho Mail credentials
+    EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
+    EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
+    DEFAULT_FROM_EMAIL = 'ameghsijin@zohomail.in'  # Same as EMAIL_HOST_USER
 
 # Email timeout (in seconds)
 EMAIL_TIMEOUT = 30
-
-# For development, you can use console backend instead:
-# EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 
 # ============ 2FA SETTINGS ============
