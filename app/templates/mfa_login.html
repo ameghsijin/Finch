@@ -37,6 +37,7 @@
     <button
       type="submit"
       name="resend"
+      value="1"
       class="btn btn-primary auth-full-button"
     >
       Send verification code
@@ -48,7 +49,6 @@
   <form method="post" id="otpForm">
     {% csrf_token %}
 
-    <!-- Required because JavaScript submits the form directly -->
     <input type="hidden" name="verify" value="1">
 
     <div class="form-group">
@@ -75,6 +75,7 @@
 
     <button
       type="submit"
+      id="verifyButton"
       class="btn btn-primary auth-full-button"
     >
       Verify
@@ -139,18 +140,21 @@
 {% block extra_scripts %}
 <script>
 document.addEventListener("DOMContentLoaded", () => {
+  const form = document.getElementById("otpForm");
   const input = document.getElementById("otp_code");
+  const button = document.getElementById("verifyButton");
 
-  if (!input) return;
+  if (!form || !input || !button) return;
 
   input.focus();
 
   input.addEventListener("input", () => {
     input.value = input.value.replace(/\D/g, "").slice(0, 6);
+  });
 
-    if (input.value.length === 6) {
-      document.getElementById("otpForm").submit();
-    }
+  form.addEventListener("submit", () => {
+    button.disabled = true;
+    button.textContent = "Verifying...";
   });
 });
 </script>
