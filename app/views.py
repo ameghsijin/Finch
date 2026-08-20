@@ -743,32 +743,32 @@ def login_view(request):
 
 
 def _send_2fa_email(user_email, otp_code):
-    """Send OTP through Resend, or print locally."""
+    """Send OTP through Brevo HTTP API."""
 
-    # Local development: don't use Resend
-    if settings.DEBUG:
-        print("\n" + "=" * 50)
-        print(f"🔐 OTP FOR {user_email}: {otp_code}")
-        print("=" * 50 + "\n")
-        return True
-
-    # Production: use Resend
     try:
         response = requests.post(
-            "https://api.resend.com/emails",
+            "https://api.brevo.com/v3/smtp/email",
             headers={
-                "Authorization": f"Bearer {settings.RESEND_API_KEY}",
+                "api-key": settings.BREVO_API_KEY,
                 "Content-Type": "application/json",
+                "Accept": "application/json",
             },
             json={
-                "from": settings.RESEND_FROM_EMAIL,
-                "to": [user_email],
-                "subject": "Your 2FA Verification Code - Finch",
-                "text": (
+                "sender": {
+                    "name": "Finch",
+                    "email": settings.BREVO_FROM_EMAIL,
+                },
+                "to": [
+                    {
+                        "email": user_email,
+                    }
+                ],
+                "subject": "Your Finch Verification Code",
+                "textContent": (
                     f"Your verification code is: {otp_code}\n"
                     "Valid for 5 minutes."
                 ),
-                "html": f"""
+                "htmlContent": f"""
                     <h2>🔐 Finch 2FA</h2>
                     <p>Your verification code:</p>
                     <h1 style="font-size:36px;letter-spacing:8px;">
@@ -781,15 +781,16 @@ def _send_2fa_email(user_email, otp_code):
         )
 
         response.raise_for_status()
+        print("✅ Brevo email sent successfully.")
         return True
 
     except requests.HTTPError as e:
-        print("RESEND STATUS:", e.response.status_code)
-        print("RESEND RESPONSE:", e.response.text)
+        print("❌ BREVO STATUS:", e.response.status_code)
+        print("❌ BREVO RESPONSE:", e.response.text)
         return False
 
     except Exception as e:
-        print(f"Resend email failed: {e}")
+        print("❌ Brevo email failed:", str(e))
         return False
 
 def mfa_login(request):
