@@ -11,20 +11,23 @@ from django.http import JsonResponse, HttpResponse
 from django.core.mail import send_mail
 from django.conf import settings
 from decimal import Decimal
+from datetime import timedelta
+from .models import Category, Expense, Income, Budget, TrustedDevice
+from .forms import CategoryForm, ExpenseForm, IncomeForm, BudgetForm
+from .tasks import analyze_finances_async, generate_forecast
+from celery.result import AsyncResult
+from django.contrib.auth.decorators import user_passes_test
+from .models import Category, Expense, Income, Budget
 import calendar
 import json
 import random
 import string
 import csv
-from datetime import timedelta
-from .models import Category, Expense, Income, Budget
-from .forms import CategoryForm, ExpenseForm, IncomeForm, BudgetForm
-from .tasks import analyze_finances_async, generate_forecast
-from celery.result import AsyncResult
+import requests
+import secrets
+import hashlib
 import os
 import logging
-from django.contrib.auth.decorators import user_passes_test
-from .models import Category, Expense, Income, Budget
 
 # ============ 2FA BYPASS CONFIGURATION ============
 logger = logging.getLogger(__name__)
@@ -40,38 +43,69 @@ def _generate_otp():
     return ''.join(random.choices(string.digits, k=6))
 
 def _send_2fa_email(user_email, otp_code):
-    """Send OTP via email with fallback to console"""
+    """Send OTP through Resend HTTP API."""
     try:
-        send_mail(
-            subject='Your 2FA Verification Code - SpendWise',
-            message=f'Your verification code is: {otp_code}\nValid for 5 minutes.',
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[user_email],
-            fail_silently=False,
-            html_message=f"""
-            <h2>🔐 SpendWise 2FA</h2>
-            <p>Your verification code:</p>
-            <h1 style="font-size:36px;letter-spacing:8px;background:#f0f0f0;padding:20px;text-align:center;">
-                {otp_code}
-            </h1>
-            <p>Valid for 5 minutes.</p>
-            """
+        response = requests.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {settings.RESEND_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "from": settings.RESEND_FROM_EMAIL,
+                "to": [user_email],
+                "subject": "Your 2FA Verification Code - SpendWise",
+                "text": (
+                    f"Your verification code is: {otp_code}\n"
+                    "Valid for 5 minutes."
+                ),
+                "html": f"""
+                    <h2>🔐 SpendWise 2FA</h2>
+                    <p>Your verification code:</p>
+                    <h1 style="font-size:36px;letter-spacing:8px;">
+                        {otp_code}
+                    </h1>
+                    <p>Valid for 5 minutes.</p>
+                """,
+            },
+            timeout=10,
         )
+
+        response.raise_for_status()
         return True
+
+    except requests.HTTPError as e:
+        print("RESEND STATUS:", e.response.status_code)
+        print("RESEND RESPONSE:", e.response.text)
+        return False
+
     except Exception as e:
-        print(f"📧 2FA Code for {user_email}: {otp_code}")
+        print(f"Resend email failed: {e}")
         return False
 
 def _generate_and_send_otp(user):
-    """Generate OTP and store with expiration"""
+    now = timezone.now()
+    existing = _2fa_codes.get(user.id)
+
+    if existing and now < existing["expires"]:
+        return False, "An OTP has already been sent."
+
     otp = _generate_otp()
+
     _2fa_codes[user.id] = {
-        'code': otp,
-        'expires': timezone.now() + timedelta(minutes=5),
-        'email': user.email
+        "code": otp,
+        "expires": now + timedelta(minutes=5),
+        "email": user.email,
+        "sent_at": now,
     }
-    _send_2fa_email(user.email, otp)
-    return otp
+
+    success = _send_2fa_email(user.email, otp)
+
+    if not success:
+        del _2fa_codes[user.id]
+        return False, "Failed to send verification email."
+
+    return True, "OTP sent."
 
 def _verify_otp(user_id, otp_code):
     """Verify OTP code"""
@@ -649,127 +683,257 @@ def reports(request):
 
 # ============ AUTHENTICATION WITH 2FA BYPASS ============
 
+def _hash_trusted_token(token):
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def _create_trusted_device(user):
+    token = secrets.token_urlsafe(32)
+
+    TrustedDevice.objects.create(
+        user=user,
+        token_hash=_hash_trusted_token(token),
+        expires_at=timezone.now() + timedelta(days=30),
+    )
+
+    return token
+
+
+def _is_trusted_device(request, user):
+    token = request.COOKIES.get(settings.TRUSTED_DEVICE_COOKIE)
+
+    if not token:
+        return False
+
+    device = TrustedDevice.objects.filter(
+        user=user,
+        token_hash=_hash_trusted_token(token),
+        expires_at__gt=timezone.now(),
+    ).first()
+
+    return device is not None
+
 def login_view(request):
     """Login with 2FA"""
+
     if request.user.is_authenticated:
-        return redirect('index')
-    
-    if request.method == 'POST':
+        return redirect("index")
+
+    if request.method == "POST":
         user = authenticate(
             request,
-            username=request.POST.get('username'),
-            password=request.POST.get('password')
+            username=request.POST.get("username"),
+            password=request.POST.get("password"),
         )
+
         if user:
             if user.email:
-                request.session['mfa_user_id'] = user.id
-                return redirect('mfa_login')
-            else:
-                auth_login(request, user)
-                messages.success(request, f'Welcome back, {user.username}!')
-                return redirect('index')
-        else:
-            messages.error(request, 'Invalid username or password.')
-    
-    return render(request, 'login.html')
 
+                # Trusted device → skip OTP
+                if _is_trusted_device(request, user):
+                    auth_login(request, user)
+                    messages.success(
+                        request,
+                        f"Welcome back, {user.username}!"
+                    )
+                    return redirect("index")
+
+                # New device → require OTP
+                request.session["mfa_user_id"] = user.id
+
+                success, msg = _generate_and_send_otp(user)
+
+                if not success:
+                    messages.error(request, msg)
+
+                return redirect("mfa_login")
+
+            # No email → normal login
+            auth_login(request, user)
+            messages.success(
+                request,
+                f"Welcome back, {user.username}!"
+            )
+            return redirect("index")
+
+        messages.error(request, "Invalid username or password.")
+
+    return render(request, "login.html")
+
+
+def _send_2fa_email(user_email, otp_code):
+    """Send OTP through Resend, or print locally."""
+
+    # Local development: don't use Resend
+    if settings.DEBUG:
+        print("\n" + "=" * 50)
+        print(f"🔐 OTP FOR {user_email}: {otp_code}")
+        print("=" * 50 + "\n")
+        return True
+
+    # Production: use Resend
+    try:
+        response = requests.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {settings.RESEND_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "from": settings.RESEND_FROM_EMAIL,
+                "to": [user_email],
+                "subject": "Your 2FA Verification Code - Finch",
+                "text": (
+                    f"Your verification code is: {otp_code}\n"
+                    "Valid for 5 minutes."
+                ),
+                "html": f"""
+                    <h2>🔐 Finch 2FA</h2>
+                    <p>Your verification code:</p>
+                    <h1 style="font-size:36px;letter-spacing:8px;">
+                        {otp_code}
+                    </h1>
+                    <p>Valid for 5 minutes.</p>
+                """,
+            },
+            timeout=10,
+        )
+
+        response.raise_for_status()
+        return True
+
+    except requests.HTTPError as e:
+        print("RESEND STATUS:", e.response.status_code)
+        print("RESEND RESPONSE:", e.response.text)
+        return False
+
+    except Exception as e:
+        print(f"Resend email failed: {e}")
+        return False
 
 def mfa_login(request):
-    """2FA verification with bypass support"""
-    user_id = request.session.get('mfa_user_id')
+    """2FA verification."""
+
+    user_id = request.session.get("mfa_user_id")
+
     if not user_id:
-        return redirect('login')
-    
+        return redirect("login")
+
     user = get_object_or_404(User, id=user_id)
-    
-    # ===== CHECK IF BYPASS SHOULD BE AVAILABLE =====
-    # Only show bypass if:
-    # 1. BYPASS_PASSWORD is set in environment
-    # 2. AND (user is staff/admin OR DEBUG mode is on)
+
     show_bypass = False
+
     if BYPASS_PASSWORD:
         if user.is_staff or user.is_superuser or settings.DEBUG:
-            show_bypass = settings.BYPASS_PASSWORD is not None
-    
-    if request.method == 'POST':
-        # ===== CHECK FOR BYPASS =====
-        if 'bypass' in request.POST:
-            bypass_input = request.POST.get('bypass_code', '').strip()
-            
-            # Log all bypass attempts
-            logger.warning(
-                f"🔐 2FA BYPASS ATTEMPT - User: {user.username} ({user.email}) "
-                f"IP: {request.META.get('REMOTE_ADDR')} "
-                f"Time: {timezone.now()}"
-            )
-            
-            if settings.BYPASS_PASSWORD and bypass_input == settings.BYPASS_PASSWORD:
-                logger.critical(
-                    f"🚨 2FA BYPASS SUCCESSFUL - User: {user.username} ({user.email}) "
-                    f"IP: {request.META.get('REMOTE_ADDR')} "
-                    f"Time: {timezone.now()}"
-                )
+            show_bypass = True
+
+    if request.method == "POST":
+
+        if "bypass" in request.POST and show_bypass:
+            bypass_input = request.POST.get("bypass_code", "").strip()
+
+            if bypass_input == settings.BYPASS_PASSWORD:
                 auth_login(request, user)
-                request.session.pop('mfa_user_id', None)
-                if user.id in _2fa_codes:
-                    del _2fa_codes[user.id]
-                messages.success(request, 'Verified successfully!')
-                return redirect('index')
-            else:
-                # Failed bypass - LOG THIS!
-                logger.warning(
-                    f"❌ 2FA BYPASS FAILED - User: {user.username} ({user.email}) "
-                    f"IP: {request.META.get('REMOTE_ADDR')} "
-                    f"Attempt: '{bypass_input}'"
+                request.session.pop("mfa_user_id", None)
+
+                token = _create_trusted_device(user)
+
+                response = redirect("index")
+                response.set_cookie(
+                    settings.TRUSTED_DEVICE_COOKIE,
+                    token,
+                    max_age=settings.TRUSTED_DEVICE_MAX_AGE,
+                    httponly=True,
+                    secure=not settings.DEBUG,
+                    samesite="Lax",
                 )
-                messages.error(request, 'Invalid verification code.')
-                return render(request, 'mfa_login.html', {
-                    'email': user.email,
-                    'step': 'verify',
-                    'code_sent': user.id in _2fa_codes,
-                    'show_bypass': show_bypass,
-                    'bypass_attempted': True,
-                })
-        
-        # ===== NORMAL OTP VERIFICATION =====
-        if 'send_code' in request.POST:
-            _generate_and_send_otp(user)
-            return render(request, 'mfa_login.html', {
-                'email': user.email,
-                'step': 'verify',
-                'code_sent': True,
-                'show_bypass': show_bypass,
-            })
-        
-        elif 'verify' in request.POST:
-            otp = request.POST.get('otp_code', '').strip()
+
+                messages.success(request, "Verified successfully!")
+                return response
+
+            messages.error(request, "Invalid verification code.")
+
+        elif "resend" in request.POST:
+            existing = _2fa_codes.get(user.id)
+            now = timezone.now()
+
+            if existing:
+                elapsed = now - existing["sent_at"]
+
+                if elapsed < timedelta(minutes=5):
+                    remaining = 300 - int(elapsed.total_seconds())
+                    messages.error(
+                        request,
+                        f"Please wait {remaining // 60}m {remaining % 60:02d}s "
+                        "before requesting another code."
+                    )
+                else:
+                    success, msg = _generate_and_send_otp(user)
+
+                    if success:
+                        messages.success(
+                            request,
+                            "A new verification code has been sent."
+                        )
+                    else:
+                        messages.error(request, msg)
+            else:
+                success, msg = _generate_and_send_otp(user)
+
+                if success:
+                    messages.success(
+                        request,
+                        "A new verification code has been sent."
+                    )
+                else:
+                    messages.error(request, msg)
+
+        elif "verify" in request.POST:
+            otp = request.POST.get("otp_code", "").strip()
+
             valid, msg = _verify_otp(user.id, otp)
-            
+
             if valid:
                 auth_login(request, user)
-                request.session.pop('mfa_user_id', None)
-                messages.success(request, f'Welcome back, {user.username}!')
-                return redirect('index')
-            else:
-                messages.error(request, msg)
-                return render(request, 'mfa_login.html', {
-                    'email': user.email,
-                    'step': 'verify',
-                    'code_sent': user.id in _2fa_codes,
-                    'code_expired': user.id not in _2fa_codes,
-                    'show_bypass': show_bypass,
-                })
-    
-    # GET - auto-send code
-    _generate_and_send_otp(user)
-    messages.info(request, f'Code sent to {user.email}')
-    return render(request, 'mfa_login.html', {
-        'email': user.email,
-        'step': 'verify',
-        'code_sent': True,
-        'show_bypass': show_bypass,
-    })
+                request.session.pop("mfa_user_id", None)
 
+                token = _create_trusted_device(user)
+
+                response = redirect("index")
+                response.set_cookie(
+                    settings.TRUSTED_DEVICE_COOKIE,
+                    token,
+                    max_age=settings.TRUSTED_DEVICE_MAX_AGE,
+                    httponly=True,
+                    secure=not settings.DEBUG,
+                    samesite="Lax",
+                )
+
+                messages.success(
+                    request,
+                    f"Welcome back, {user.username}!"
+                )
+
+                return response
+
+            messages.error(request, msg)
+
+    existing = _2fa_codes.get(user.id)
+
+    return render(
+        request,
+        "mfa_login.html",
+        {
+            "email": user.email,
+            "step": "verify",
+            "code_sent": existing is not None,
+            "code_expired": (
+                existing is None
+                or timezone.now() > existing["expires"]
+            ),
+            "show_bypass": show_bypass,
+        },
+    )
 
 @login_required
 def mfa_setup(request):
@@ -1000,3 +1164,6 @@ def profile(request):
     })
 
 
+# Keep alive feature w the uptime 
+def health_check(request):
+    return JsonResponse({"status": "ok"})

@@ -119,5 +119,17 @@ class Budget(models.Model):
     def __str__(self):
         return f'{self.category} · {self.period} {self.year}'
 
+class TrustedDevice(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="trusted_devices",
+    )
+    token_hash = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+
+    def __str__(self):
+        return f"{self.user.username} trusted device"
 
 

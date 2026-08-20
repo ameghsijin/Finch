@@ -36,7 +36,7 @@
 
     <button
       type="submit"
-      name="send_code"
+      name="resend"
       class="btn btn-primary auth-full-button"
     >
       Send verification code
@@ -47,6 +47,9 @@
 
   <form method="post" id="otpForm">
     {% csrf_token %}
+
+    <!-- Required because JavaScript submits the form directly -->
+    <input type="hidden" name="verify" value="1">
 
     <div class="form-group">
       <label for="otp_code">Verification code</label>
@@ -72,7 +75,6 @@
 
     <button
       type="submit"
-      name="verify"
       class="btn btn-primary auth-full-button"
     >
       Verify
@@ -81,7 +83,13 @@
 
   <form method="post" class="resend-form">
     {% csrf_token %}
-    <button type="submit" name="send_code" class="auth-text-button">
+
+    <button
+      type="submit"
+      name="resend"
+      value="1"
+      class="auth-text-button"
+    >
       Didn't receive it? <strong>Resend code</strong>
     </button>
   </form>
@@ -89,6 +97,7 @@
 {% endif %}
 
 {% if show_bypass %}
+
   <details class="admin-bypass">
     <summary>Administrative access</summary>
 
@@ -111,12 +120,14 @@
       <button
         type="submit"
         name="bypass"
+        value="1"
         class="btn btn-danger"
       >
         Verify
       </button>
     </form>
   </details>
+
 {% endif %}
 
 <div class="auth-note">

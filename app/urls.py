@@ -1,4 +1,5 @@
 from django.urls import path
+from .views import health_check
 from . import views
 
 urlpatterns = [
@@ -51,4 +52,7 @@ urlpatterns = [
 
     # Profile
     path("profile/", views.profile, name="profile"),
+
+    #Uptime
+    path("health/", health_check),
 ]
