@@ -15,13 +15,9 @@ whitenoise==6.7.0
 # Environment
 python-dotenv==1.0.1
 
-# Celery & Redis
-celery==5.4.0
+# Redis client (optional - only used if REDIS_URL is set, for
+# shared AI-chat-history caching across worker processes)
 redis==5.2.1
-kombu==5.4.2
-billiard==4.2.0
-amqp==5.2.0
-vine==5.1.0
 
 # AI - Groq
 groq>=1.5.0,<1.7.0

@@ -119,6 +119,39 @@ class Budget(models.Model):
     def __str__(self):
         return f'{self.category} · {self.period} {self.year}'
 
+class TwoFactorCode(models.Model):
+    """
+    Stores 2FA OTP codes in the database instead of in-process memory.
+
+    A plain in-memory dict only exists inside a single process. Render
+    (and most production hosts) run the web service as several gunicorn
+    worker processes behind one URL, so the worker that generated a code
+    is very often not the same worker that handles the verification
+    request a few seconds later - that worker's dict never had the code,
+    so verification always failed with "No OTP found" / "Invalid OTP".
+    Storing codes in the database makes them visible to every worker
+    process and durable across restarts/deploys.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="twofactor_codes",
+    )
+    code = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+
+    def __str__(self):
+        return f"OTP for {self.user.username}"
+
+
 class TrustedDevice(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

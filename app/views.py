@@ -12,10 +12,9 @@ from django.core.mail import send_mail
 from django.conf import settings
 from decimal import Decimal
 from datetime import timedelta
-from .models import Category, Expense, Income, Budget, TrustedDevice
+from .models import Category, Expense, Income, Budget, TrustedDevice, TwoFactorCode
 from .forms import CategoryForm, ExpenseForm, IncomeForm, BudgetForm
 from .tasks import analyze_finances_async, generate_forecast
-from celery.result import AsyncResult
 from django.contrib.auth.decorators import user_passes_test
 from .models import Category, Expense, Income, Budget
 import calendar
@@ -36,91 +35,73 @@ BYPASS_PASSWORD = os.getenv("BYPASS_PASSWORD", None)  # Default to None in produ
 
 
 # ============ 2FA STORAGE ============
-_2fa_codes = {}
+#
+# OTP codes are stored in the database (see the TwoFactorCode model)
+# instead of a plain in-memory dict. A dict only lives inside one
+# process; Render (like most hosts) runs the web service as several
+# gunicorn worker processes behind the same URL, so the worker that
+# generated a code was frequently not the one that handled the
+# verification request a moment later, and its dict never had the
+# code. That's why codes "didn't work" on Render even though the
+# same code worked locally with `runserver`. The database is shared
+# by every process, so this works regardless of how many workers or
+# dynos are running.
 
 def _generate_otp():
     """Generate a 6-digit OTP code"""
     return ''.join(random.choices(string.digits, k=6))
 
-def _send_2fa_email(user_email, otp_code):
-    """Send OTP through Resend HTTP API."""
-    try:
-        response = requests.post(
-            "https://api.resend.com/emails",
-            headers={
-                "Authorization": f"Bearer {settings.RESEND_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "from": settings.RESEND_FROM_EMAIL,
-                "to": [user_email],
-                "subject": "Your 2FA Verification Code - SpendWise",
-                "text": (
-                    f"Your verification code is: {otp_code}\n"
-                    "Valid for 5 minutes."
-                ),
-                "html": f"""
-                    <h2>🔐 SpendWise 2FA</h2>
-                    <p>Your verification code:</p>
-                    <h1 style="font-size:36px;letter-spacing:8px;">
-                        {otp_code}
-                    </h1>
-                    <p>Valid for 5 minutes.</p>
-                """,
-            },
-            timeout=10,
-        )
-
-        response.raise_for_status()
-        return True
-
-    except requests.HTTPError as e:
-        print("RESEND STATUS:", e.response.status_code)
-        print("RESEND RESPONSE:", e.response.text)
-        return False
-
-    except Exception as e:
-        print(f"Resend email failed: {e}")
-        return False
-
 def _generate_and_send_otp(user):
     now = timezone.now()
-    existing = _2fa_codes.get(user.id)
+    existing = (
+        TwoFactorCode.objects
+        .filter(user=user)
+        .order_by("-created_at")
+        .first()
+    )
 
-    if existing and now < existing["expires"]:
+    if existing and not existing.is_expired():
         return False, "An OTP has already been sent."
 
     otp = _generate_otp()
 
-    _2fa_codes[user.id] = {
-        "code": otp,
-        "expires": now + timedelta(minutes=5),
-        "email": user.email,
-        "sent_at": now,
-    }
+    # Clear out any stale codes for this user before issuing a new one.
+    TwoFactorCode.objects.filter(user=user).delete()
+
+    record = TwoFactorCode.objects.create(
+        user=user,
+        code=otp,
+        expires_at=now + timedelta(minutes=5),
+    )
 
     success = _send_2fa_email(user.email, otp)
 
     if not success:
-        del _2fa_codes[user.id]
+        record.delete()
         return False, "Failed to send verification email."
 
     return True, "OTP sent."
 
 def _verify_otp(user_id, otp_code):
     """Verify OTP code"""
-    if user_id not in _2fa_codes:
+    stored = (
+        TwoFactorCode.objects
+        .filter(user_id=user_id)
+        .order_by("-created_at")
+        .first()
+    )
+
+    if not stored:
         return False, "No OTP found. Request a new code."
-    
-    stored = _2fa_codes[user_id]
-    if timezone.now() > stored['expires']:
-        del _2fa_codes[user_id]
+
+    if stored.is_expired():
+        stored.delete()
         return False, "OTP expired. Request a new code."
-    
-    if stored['code'] != otp_code:
+
+    if stored.code != otp_code:
         return False, "Invalid OTP. Try again."
-    
-    del _2fa_codes[user_id]
+
+    stored.delete()
     return True, "Verified."
 
 def _verify_bypass_password(bypass_code):
@@ -854,11 +835,16 @@ def mfa_login(request):
             messages.error(request, "Invalid verification code.")
 
         elif "resend" in request.POST:
-            existing = _2fa_codes.get(user.id)
+            existing = (
+                TwoFactorCode.objects
+                .filter(user=user)
+                .order_by("-created_at")
+                .first()
+            )
             now = timezone.now()
 
             if existing:
-                elapsed = now - existing["sent_at"]
+                elapsed = now - existing.created_at
 
                 if elapsed < timedelta(minutes=5):
                     remaining = 300 - int(elapsed.total_seconds())
@@ -918,7 +904,12 @@ def mfa_login(request):
 
             messages.error(request, msg)
 
-    existing = _2fa_codes.get(user.id)
+    existing = (
+        TwoFactorCode.objects
+        .filter(user=user)
+        .order_by("-created_at")
+        .first()
+    )
 
     return render(
         request,
@@ -929,7 +920,7 @@ def mfa_login(request):
             "code_sent": existing is not None,
             "code_expired": (
                 existing is None
-                or timezone.now() > existing["expires"]
+                or existing.is_expired()
             ),
             "show_bypass": show_bypass,
         },
@@ -999,92 +990,98 @@ def ai_assistant(request):
         'active_page': 'ai_assistant',
     })
 
+def _clean_ai_answer(answer):
+    """Strip stray model reasoning/formatting artifacts from an answer."""
+    import re
+
+    answer = re.sub(r'<think>.*?</think>', '', answer, flags=re.DOTALL)
+    answer = re.sub(
+        r'^.*?(thinking|reasoning|analysis|approach|plan|step|draft|refine|evaluate).*?\n',
+        '', answer, flags=re.IGNORECASE | re.MULTILINE,
+    )
+    answer = re.sub(r'\n{3,}', '\n\n', answer)
+    answer = re.sub(r'^\d+\.\s+', '', answer, flags=re.MULTILINE)
+    answer = re.sub(
+        r'^(Thinking|Analysis|Reasoning|Approach|Plan|Step|Draft|Refine|Evaluate):\s*',
+        '', answer, flags=re.IGNORECASE | re.MULTILINE,
+    )
+
+    return answer.strip()
+
+
+# NOTE: the AI endpoints below used to kick off a Celery task with
+# `.delay()` and have the frontend poll `/ai-result/<task_id>/` for
+# the result. That required a Celery worker process consuming from a
+# Redis broker. On Render no worker service or Redis instance was
+# ever provisioned, so the task was either never picked up (frontend
+# would poll until it gave up and showed "took too long") or the
+# `.delay()` call itself raised a connection error. Calling the
+# (now plain) functions directly and returning the answer in the
+# same request removes that dependency completely.
+
 @login_required
 def ai_query(request):
-    """Process AI financial query"""
+    """Process an AI financial query and return the answer directly."""
     if request.method != 'GET':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
-    
+
     question = request.GET.get('q', '').strip()
     if not question:
         return JsonResponse({'error': 'Please provide a question'}, status=400)
-    
-    task = analyze_finances_async.delay(question, request.user.id)
-    return JsonResponse({
-        'task_id': task.id,
-        'status': 'processing',
-        'message': 'Analyzing your financial data...'
-    })
 
-@login_required
-def get_ai_result(request, task_id):
-    """Get AI query result with formatted response"""
-    task = AsyncResult(task_id)
-    
-    if not task.ready():
-        return JsonResponse({
-            'status': 'processing',
-            'message': 'Still processing...'
-        })
-    
-    result = task.result
-    if not isinstance(result, dict) or result.get('user_id') != request.user.id:
-        return JsonResponse({'error': 'Unauthorized'}, status=403)
-    
+    result = analyze_finances_async(question, request.user.id)
+
     if 'error' in result:
         return JsonResponse({
             'status': 'error',
-            'error': result['error']
+            'error': result['error'],
         }, status=500)
-    
-    # Aggressively clean the answer
+
     if 'answer' in result:
-        import re
-        answer = result['answer']
-        
-        # Remove all thinking patterns
-        answer = re.sub(r'<think>.*?</think>', '', answer, flags=re.DOTALL)
-        answer = re.sub(r'^.*?(thinking|reasoning|analysis|approach|plan|step|draft|refine|evaluate).*?\n', '', answer, flags=re.IGNORECASE | re.MULTILINE)
-        answer = re.sub(r'\n{3,}', '\n\n', answer)
-        
-        # Remove numbered steps
-        answer = re.sub(r'^\d+\.\s+', '', answer, flags=re.MULTILINE)
-        
-        # Remove any remaining thinking indicators
-        answer = re.sub(r'^(Thinking|Analysis|Reasoning|Approach|Plan|Step|Draft|Refine|Evaluate):\s*', '', answer, flags=re.IGNORECASE | re.MULTILINE)
-        
-        result['answer'] = answer.strip()
-    
+        result['answer'] = _clean_ai_answer(result['answer'])
+
     return JsonResponse({
         'status': 'completed',
-        'result': result
+        'result': result,
     })
 
 @login_required
 def forecast(request, months=6):
-    """Generate financial forecast"""
+    """Generate a financial forecast and return it directly."""
     if request.method != 'GET':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
-    
-    task = generate_forecast.delay(request.user.id, months)
+
+    result = generate_forecast(request.user.id, months)
+
+    if 'error' in result:
+        return JsonResponse({
+            'status': 'error',
+            'error': result['error'],
+        }, status=500)
+
     return JsonResponse({
-        'task_id': task.id,
-        'status': 'processing',
-        'message': f'Generating {months}-month forecast...'
+        'status': 'completed',
+        'result': result,
     })
 
 @login_required
 def ai_forecast(request):
-    """Generate financial forecast (alternative endpoint for AI Assistant)"""
+    """Generate a financial forecast (alternative endpoint for AI Assistant)."""
     if request.method != 'GET':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
-    
+
     months = int(request.GET.get('months', 6))
-    task = generate_forecast.delay(request.user.id, months)
+    result = generate_forecast(request.user.id, months)
+
+    if 'error' in result:
+        return JsonResponse({
+            'status': 'error',
+            'error': result['error'],
+        }, status=500)
+
     return JsonResponse({
-        'task_id': task.id,
-        'status': 'processing',
-        'message': f'Generating {months}-month forecast...'
+        'status': 'completed',
+        'result': result,
     })
 
 # ============ PROFILE ============

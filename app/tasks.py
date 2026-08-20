@@ -4,7 +4,6 @@ from datetime import date, timedelta
 
 import logging
 
-from celery import shared_task
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.cache import cache
@@ -709,20 +708,25 @@ def generate_local_advice(user):
 
 
 # =========================================================
-# CONVERSATION MEMORY (in-memory, per-session)
+# CONVERSATION MEMORY (per-user, short-lived)
 # =========================================================
 #
 # Uses Django's cache framework so the model can resolve
 # follow-up questions like "what about December?" against
 # what was just discussed. This is intentionally simple and
-# session-scoped: it does NOT persist to the database, and
-# expires automatically after a period of inactivity.
+# does NOT persist to the database - it expires automatically
+# after a period of inactivity.
 #
 # IMPORTANT: this only works reliably across requests if
 # Django's default cache is backed by something shared across
-# processes (e.g. Redis). The default local-memory cache is
-# per-process, so with multiple Celery worker forks, history
-# may not be visible to every fork consistently.
+# processes (e.g. Redis, when REDIS_URL is configured - see
+# settings.py). Without Redis it falls back to Django's local-
+# memory cache, which is per-process: with multiple gunicorn
+# worker processes, a follow-up question may land on a
+# different worker and not see the earlier turn. That's a
+# minor loss of conversational memory, not a functional bug -
+# every call is wrapped so a cache miss/error never breaks the
+# actual answer.
 # =========================================================
 
 CHAT_HISTORY_CACHE_PREFIX = "finch_chat_history"
@@ -733,27 +737,41 @@ CHAT_HISTORY_TTL_SECONDS = 60 * 30    # forget after 30 min of inactivity
 def get_chat_history(user_id):
     """Return the list of past {role, content} messages for this user."""
     key = f"{CHAT_HISTORY_CACHE_PREFIX}:{user_id}"
-    return cache.get(key, [])
+
+    try:
+        return cache.get(key, [])
+    except Exception:
+        # Never let a cache backend problem break the AI answer itself.
+        logger.exception("get_chat_history failed")
+        return []
 
 
 def append_chat_history(user_id, question, answer):
     """Store this turn and trim to the last N turns."""
     key = f"{CHAT_HISTORY_CACHE_PREFIX}:{user_id}"
-    history = cache.get(key, [])
 
-    history.append({"role": "user", "content": question})
-    history.append({"role": "assistant", "content": answer})
+    try:
+        history = cache.get(key, [])
 
-    # Keep only the last N turns (N*2 messages).
-    history = history[-(CHAT_HISTORY_MAX_TURNS * 2):]
+        history.append({"role": "user", "content": question})
+        history.append({"role": "assistant", "content": answer})
 
-    cache.set(key, history, timeout=CHAT_HISTORY_TTL_SECONDS)
+        # Keep only the last N turns (N*2 messages).
+        history = history[-(CHAT_HISTORY_MAX_TURNS * 2):]
+
+        cache.set(key, history, timeout=CHAT_HISTORY_TTL_SECONDS)
+    except Exception:
+        logger.exception("append_chat_history failed")
 
 
 def clear_chat_history(user_id):
     """Forget this user's conversation history."""
     key = f"{CHAT_HISTORY_CACHE_PREFIX}:{user_id}"
-    cache.delete(key)
+
+    try:
+        cache.delete(key)
+    except Exception:
+        logger.exception("clear_chat_history failed")
 
 
 # =========================================================
@@ -937,10 +955,25 @@ Answer only the user. Do not show reasoning.
 
 
 # =========================================================
-# MAIN CELERY TASK
+# MAIN AI QUERY (runs synchronously in the request/response
+# cycle - see note below)
+# =========================================================
+#
+# NOTE: This used to be a Celery task dispatched with `.delay()`
+# and polled for a result. That required a separately-running
+# Celery worker process connected to a Redis broker. On Render,
+# nothing was consuming those queued tasks (no worker service was
+# deployed) and no Redis instance was configured either, so every
+# `.delay()` call either errored immediately or queued a task that
+# would never be picked up - which is why the AI feature never
+# worked on the hosted site even though it worked locally.
+#
+# Groq's chat completion call typically takes well under Render's
+# request timeout, so we just call it directly and return the
+# answer in the same request. This removes the Celery/Redis
+# dependency entirely.
 # =========================================================
 
-@shared_task
 def analyze_finances_async(question, user_id):
     """
     Answer a user's financial question.
@@ -1081,10 +1114,10 @@ def analyze_finances_async(question, user_id):
 
 
 # =========================================================
-# FORECAST
+# FORECAST (also synchronous now - see note above
+# analyze_finances_async)
 # =========================================================
 
-@shared_task
 def generate_forecast(user_id, months=6):
     """
     Generate a financial forecast using Groq.

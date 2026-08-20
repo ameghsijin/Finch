@@ -45,7 +45,6 @@ urlpatterns = [
     # AI
     path("ai-assistant/", views.ai_assistant, name="ai_assistant"),
     path("ai-query/", views.ai_query, name="ai_query"),
-    path("ai-result/<str:task_id>/", views.get_ai_result, name="ai_result"),
     path("ai-forecast/", views.ai_forecast, name="ai_forecast"),
     path("forecast/", views.forecast, name="forecast"),
     path("forecast/<int:months>/", views.forecast, name="forecast_months"),

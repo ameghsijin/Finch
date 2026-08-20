@@ -156,71 +156,6 @@ function showError(message) {
 }
 
 
-function pollResult(taskId) {
-  let attempts = 0;
-  const maxAttempts = 30;
-
-  const interval = setInterval(() => {
-    attempts++;
-
-    fetch(`/ai-result/${taskId}/`)
-      .then(response => {
-        if (!response.ok) {
-          throw new Error("Result request failed");
-        }
-        return response.json();
-      })
-      .then(data => {
-
-        if (data.status === "completed") {
-          clearInterval(interval);
-
-          removeLoading();
-
-          const result = data.result || {};
-          const answer =
-            result.answer ||
-            result.error ||
-            "I couldn't find an answer to that.";
-
-          addMessage("bot", answer);
-          setInputEnabled(true);
-          return;
-        }
-
-        if (data.status === "error") {
-          clearInterval(interval);
-
-          showError(
-            data.error ||
-            "Something went wrong. Please try again."
-          );
-
-          return;
-        }
-
-        if (attempts >= maxAttempts) {
-          clearInterval(interval);
-
-          showError(
-            "That request took too long. Please try again."
-          );
-        }
-      })
-      .catch(() => {
-        if (attempts >= maxAttempts) {
-          clearInterval(interval);
-
-          showError(
-            "Unable to retrieve the answer. Please try again."
-          );
-        }
-      });
-
-  }, 2000);
-}
-
-
 function askQuestion(question = null) {
   const input = document.getElementById("questionInput");
   const text = (question || input.value).trim();
@@ -242,9 +177,17 @@ function askQuestion(question = null) {
       return response.json();
     })
     .then(data => {
+      removeLoading();
 
-      if (data.status === "processing") {
-        pollResult(data.task_id);
+      if (data.status === "completed") {
+        const result = data.result || {};
+        const answer =
+          result.answer ||
+          result.error ||
+          "I couldn't find an answer to that.";
+
+        addMessage("bot", answer);
+        setInputEnabled(true);
         return;
       }
 

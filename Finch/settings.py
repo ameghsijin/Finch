@@ -200,34 +200,32 @@ GROQ_MODEL = os.getenv(
 )
 
 
-CELERY_BROKER_URL = os.getenv(
-    "REDIS_URL",
-    "redis://localhost:6379/0",
-)
+# The AI assistant runs synchronously (see app/tasks.py) and no longer
+# uses Celery/Redis, so a Redis instance is optional. If REDIS_URL is
+# set (e.g. a Redis add-on is attached), it's used for caching so AI
+# chat history can be shared across worker processes/dynos. Otherwise
+# fall back to Django's in-process cache so the app still works with
+# zero extra infrastructure - this is what fixed the AI feature
+# breaking on Render, where no Redis instance was ever provisioned.
+REDIS_URL = os.getenv("REDIS_URL")
 
-CELERY_RESULT_BACKEND = os.getenv(
-    "REDIS_URL",
-    "redis://localhost:6379/0",
-)
-
-CELERY_TIMEZONE = TIME_ZONE
-
-CELERY_TASK_TRACK_STARTED = True
-
-CELERY_TASK_TIME_LIMIT = 30 * 60
-
-
-CACHES = {
-    "default": {
-        "BACKEND": (
-            "django.core.cache.backends.redis.RedisCache"
-        ),
-        "LOCATION": os.getenv(
-            "REDIS_URL",
-            "redis://localhost:6379/1",
-        ),
-    },
-}
+if REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": (
+                "django.core.cache.backends.redis.RedisCache"
+            ),
+            "LOCATION": REDIS_URL,
+        },
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": (
+                "django.core.cache.backends.locmem.LocMemCache"
+            ),
+        },
+    }
 
 TRUSTED_DEVICE_COOKIE = "finch_trusted_device"
 TRUSTED_DEVICE_MAX_AGE = 60 * 60 * 24 * 30
