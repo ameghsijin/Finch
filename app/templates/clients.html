@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}Clients · Finch{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <p class="eyebrow">Business</p>
+    <h1>Clients</h1>
+    <p class="subtitle">
+      Manage your clients and track employee expenses for each one.
+    </p>
+  </div>
+
+  <a href="{% url 'client_form' %}" class="btn btn-primary">
+    + Add Client
+  </a>
+</div>
+
+<!-- Search -->
+<div class="toolbar">
+  <form method="get" class="search-form" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+    <input
+      type="text"
+      name="q"
+      value="{{ q }}"
+      class="form-control"
+      placeholder="Search clients..."
+      style="min-width:200px;"
+    >
+    <button type="submit" class="btn btn-secondary">
+      Search
+    </button>
+    {% if q %}
+      <a href="{% url 'clients' %}" class="btn btn-ghost">Clear</a>
+    {% endif %}
+  </form>
+</div>
+
+<!-- Client Cards -->
+{% if clients %}
+<div class="card-grid">
+
+  {% for client in clients %}
+
+  <a
+    href="{% url 'client_detail' client.pk %}"
+    class="client-card"
+  >
+
+    <div class="client-card-header">
+
+      <div class="client-avatar">
+        {{ client.name|first|upper }}
+      </div>
+
+      <div style="flex:1;min-width:0;">
+        <h3>{{ client.name }}</h3>
+
+        {% if client.is_active %}
+          <span class="status-badge success">
+            Active
+          </span>
+        {% else %}
+          <span class="status-badge">
+            Inactive
+          </span>
+        {% endif %}
+      </div>
+
+    </div>
+
+    {% if client.contact_person %}
+      <p class="client-meta">
+        <i class="bi bi-person"></i> {{ client.contact_person }}
+      </p>
+    {% endif %}
+
+    {% if client.email %}
+      <p class="client-meta">
+        <i class="bi bi-envelope"></i> {{ client.email }}
+      </p>
+    {% endif %}
+
+    {% if client.phone %}
+      <p class="client-meta">
+        <i class="bi bi-telephone"></i> {{ client.phone }}
+      </p>
+    {% endif %}
+
+    <div class="client-card-footer">
+
+      <span>
+        <i class="bi bi-receipt"></i>
+        {{ client.expenses.count }} expense{{ client.expenses.count|pluralize }}
+      </span>
+
+      <span style="color:var(--brand);font-weight:500;">
+        View Details →
+      </span>
+
+    </div>
+
+  </a>
+
+  {% endfor %}
+
+</div>
+{% else %}
+
+<!-- Empty State -->
+<div class="empty-state">
+
+  <div class="empty-state-icon">
+    ♙
+  </div>
+
+  {% if q %}
+
+    <h2>No clients found</h2>
+
+    <p>
+      No clients matched "{{ q }}".
+    </p>
+
+    <a href="{% url 'clients' %}" class="btn btn-secondary">
+      Clear search
+    </a>
+
+  {% else %}
+
+    <h2>No clients yet</h2>
+
+    <p>
+      Add your first client to start tracking employee expenses against them.
+    </p>
+
+    <a href="{% url 'client_form' %}" class="btn btn-primary">
+      + Add Client
+    </a>
+
+  {% endif %}
+
+</div>
+
+{% endif %}
+
+{% endblock %}

@@ -107,6 +107,23 @@
         <div class="form-grid">
 
           <div class="form-field">
+            <label for="{{ form.client.id_for_label }}">
+              Client
+            </label>
+
+            {{ form.client }}
+
+            <small class="field-help">
+              Select the client this expense was for.
+            </small>
+
+            {% if form.client.errors %}
+              <div class="field-error">{{ form.client.errors }}</div>
+            {% endif %}
+          </div>
+
+
+          <div class="form-field">
             <label for="{{ form.category.id_for_label }}">
               Category
             </label>

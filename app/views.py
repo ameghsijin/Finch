@@ -12,8 +12,8 @@ from django.core.mail import send_mail
 from django.conf import settings
 from decimal import Decimal
 from datetime import timedelta
-from .models import Category, Expense, Income, Budget, TrustedDevice, TwoFactorCode
-from .forms import CategoryForm, ExpenseForm, IncomeForm, BudgetForm
+from .models import Category, Client, Expense, Income, Budget, TrustedDevice, TwoFactorCode
+from .forms import CategoryForm, ClientForm, ExpenseForm, IncomeForm, BudgetForm
 from .tasks import analyze_finances_async, generate_forecast
 from django.contrib.auth.decorators import user_passes_test
 from .models import Category, Expense, Income, Budget
@@ -241,66 +241,178 @@ def index(request):
 @login_required
 def expenses(request):
     """List expenses with filters"""
+
     user = request.user
-    
-    # Build filter params
+
     q = request.GET.get('q', '').strip()
     category = _safe_int(request.GET.get('category'))
+    client = _safe_int(request.GET.get('client'))
     payment = request.GET.get('payment', '').strip()
     date_from = _safe_date(request.GET.get('from', '').strip())
     date_to = _safe_date(request.GET.get('to', '').strip())
-    
-    # Filter queryset
-    qs = Expense.objects.select_related('category').filter(user=user)
+
+    qs = Expense.objects.select_related(
+        'category',
+        'client'
+    ).filter(user=user)
+
     if q:
-        qs = qs.filter(Q(title__icontains=q) | Q(notes__icontains=q))
+        qs = qs.filter(
+            Q(title__icontains=q) |
+            Q(notes__icontains=q)
+        )
+
     if category:
         qs = qs.filter(category_id=category)
+
+    if client:
+        qs = qs.filter(client_id=client)
+
     if payment:
         qs = qs.filter(payment_method=payment)
+
     if date_from:
         qs = qs.filter(date__gte=date_from)
+
     if date_to:
         qs = qs.filter(date__lte=date_to)
-    
-    # Paginate
+
     page_obj = _paginate(qs, request)
-    
+
     return render(request, 'expenses.html', {
         'active_page': 'expenses',
         'page_obj': page_obj,
         'total': _sum_amount(qs),
         'categories': Category.objects.filter(type='expense'),
+        'clients': Client.objects.filter(is_active=True),
         'payment_choices': Expense.PAYMENT_CHOICES,
         'q': q,
         'selected_category': category,
+        'selected_client': client,
         'selected_payment': payment,
         'date_from': date_from.isoformat() if date_from else '',
         'date_to': date_to.isoformat() if date_to else '',
-        'filters_active': any([q, category, payment, date_from, date_to]),
+        'filters_active': any([
+            q,
+            category,
+            client,
+            payment,
+            date_from,
+            date_to,
+        ]),
     })
 
 @login_required
 def expense_form(request, pk=None):
     """Create or edit expense"""
-    expense = get_object_or_404(Expense, pk=pk, user=request.user) if pk else None
-    
+
+    expense = (
+        get_object_or_404(
+            Expense,
+            pk=pk,
+            user=request.user
+        )
+        if pk
+        else None
+    )
+
     if request.method == 'POST':
-        form = ExpenseForm(request.POST, instance=expense)
+        form = ExpenseForm(
+            request.POST,
+            instance=expense
+        )
+
         if form.is_valid():
             obj = form.save(commit=False)
             obj.user = request.user
             obj.save()
-            messages.success(request, 'Expense saved successfully.')
+
+            messages.success(
+                request,
+                'Expense saved successfully.'
+            )
+
             return redirect('expenses')
+
     else:
-        form = ExpenseForm(instance=expense)
-    
-    return render(request, 'expense-form.html', {
-        'active_page': 'expenses',
-        'expense': expense,
-        'form': form,
-    })
+        form = ExpenseForm(
+            instance=expense
+        )
+
+    return render(
+        request,
+        'expense-form.html',
+        {
+            'active_page': 'expenses',
+            'expense': expense,
+            'form': form,
+        }
+    )
+
+@login_required
+def expenses_export(request):
+    """Export expenses to CSV"""
+
+    qs = Expense.objects.select_related(
+        'category',
+        'client'
+    ).filter(user=request.user)
+
+    if q := request.GET.get('q', '').strip():
+        qs = qs.filter(
+            Q(title__icontains=q) |
+            Q(notes__icontains=q)
+        )
+
+    if category := _safe_int(request.GET.get('category')):
+        qs = qs.filter(category_id=category)
+
+    if client := _safe_int(request.GET.get('client')):
+        qs = qs.filter(client_id=client)
+
+    if payment := request.GET.get('payment', '').strip():
+        qs = qs.filter(payment_method=payment)
+
+    if date_from := _safe_date(
+        request.GET.get('from', '').strip()
+    ):
+        qs = qs.filter(date__gte=date_from)
+
+    if date_to := _safe_date(
+        request.GET.get('to', '').strip()
+    ):
+        qs = qs.filter(date__lte=date_to)
+
+    response = HttpResponse(content_type='text/csv')
+
+    response['Content-Disposition'] = (
+        f'attachment; filename="{request.user.username}_expenses.csv"'
+    )
+
+    writer = csv.writer(response)
+
+    writer.writerow([
+        'Title',
+        'Client',
+        'Category',
+        'Amount',
+        'Date',
+        'Payment Method',
+        'Notes',
+    ])
+
+    for e in qs:
+        writer.writerow([
+            e.title,
+            e.client.name if e.client else '',
+            e.category.name if e.category else '',
+            e.amount,
+            e.date,
+            e.get_payment_method_display(),
+            e.notes or '',
+        ])
+
+    return response
 
 @login_required
 @require_POST
@@ -595,6 +707,102 @@ def category_delete(request, pk):
     get_object_or_404(Category, pk=pk).delete()
     messages.success(request, 'Category deleted.')
     return redirect('categories')
+
+# ----- Clients -----
+
+@login_required
+def clients(request):
+    """List clients"""
+
+    q = request.GET.get('q', '').strip()
+
+    qs = Client.objects.all()
+
+    if q:
+        qs = qs.filter(
+            Q(name__icontains=q) |
+            Q(contact_person__icontains=q) |
+            Q(email__icontains=q) |
+            Q(phone__icontains=q)
+        )
+
+    return render(request, 'clients.html', {
+        'active_page': 'clients',
+        'clients': qs,
+        'q': q,
+    })
+
+
+@login_required
+def client_form(request, pk=None):
+    """Create or edit client"""
+
+    client = (
+        get_object_or_404(Client, pk=pk)
+        if pk
+        else None
+    )
+
+    if request.method == 'POST':
+        form = ClientForm(
+            request.POST,
+            instance=client
+        )
+
+        if form.is_valid():
+            form.save()
+
+            messages.success(
+                request,
+                'Client saved successfully.'
+            )
+
+            return redirect('clients')
+
+    else:
+        form = ClientForm(instance=client)
+
+    return render(request, 'client-form.html', {
+        'active_page': 'clients',
+        'client': client,
+        'form': form,
+    })
+
+
+@login_required
+def client_detail(request, pk):
+    """Show a client and its expenses"""
+
+    client = get_object_or_404(
+        Client,
+        pk=pk
+    )
+
+    expenses_qs = (
+        Expense.objects
+        .filter(client=client)
+        .select_related('user', 'category')
+        .order_by('-date', '-pk')
+    )
+
+    employees = (
+        expenses_qs
+        .values(
+            'user__id',
+            'user__username',
+            'user__first_name',
+            'user__last_name',
+        )
+        .distinct()
+    )
+
+    return render(request, 'client-detail.html', {
+        'active_page': 'clients',
+        'client': client,
+        'expenses': expenses_qs,
+        'employees': employees,
+        'total': _sum_amount(expenses_qs),
+    })
 
 # ----- Reports -----
 @login_required

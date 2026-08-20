@@ -1,0 +1,285 @@
+{% extends "base.html" %}
+
+{% block title %}{{ client.name }} · Finch{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+
+  <div>
+    <p class="eyebrow">Client</p>
+
+    <h1>{{ client.name }}</h1>
+
+    <p class="subtitle">
+      Employee expenses associated with this client.
+    </p>
+  </div>
+
+  <div class="page-header-actions">
+
+    <a
+      href="{% url 'client_edit' client.pk %}"
+      class="btn btn-secondary"
+    >
+      Edit Client
+    </a>
+
+    <a
+      href="{% url 'expense_form' %}"
+      class="btn btn-primary"
+    >
+      + Add Expense
+    </a>
+
+  </div>
+
+</div>
+
+
+<div class="summary-grid">
+
+  <div class="summary-card">
+    <span class="summary-label">Total Expenses</span>
+
+    <strong class="summary-value">
+      ₹{{ total|floatformat:2 }}
+    </strong>
+  </div>
+
+  <div class="summary-card">
+    <span class="summary-label">Employees</span>
+
+    <strong class="summary-value">
+      {{ employees|length }}
+    </strong>
+  </div>
+
+  <div class="summary-card">
+    <span class="summary-label">Status</span>
+
+    <strong class="summary-value">
+      {% if client.is_active %}
+        Active
+      {% else %}
+        Inactive
+      {% endif %}
+    </strong>
+  </div>
+
+</div>
+
+
+<div class="content-grid">
+
+  <div class="card">
+
+    <div class="card-header">
+      <div>
+        <h2>Client Details</h2>
+      </div>
+    </div>
+
+    <div class="detail-list">
+
+      {% if client.contact_person %}
+        <div class="detail-row">
+          <span>Contact person</span>
+          <strong>{{ client.contact_person }}</strong>
+        </div>
+      {% endif %}
+
+      {% if client.email %}
+        <div class="detail-row">
+          <span>Email</span>
+          <strong>{{ client.email }}</strong>
+        </div>
+      {% endif %}
+
+      {% if client.phone %}
+        <div class="detail-row">
+          <span>Phone</span>
+          <strong>{{ client.phone }}</strong>
+        </div>
+      {% endif %}
+
+      {% if client.address %}
+        <div class="detail-row">
+          <span>Address</span>
+          <strong>{{ client.address }}</strong>
+        </div>
+      {% endif %}
+
+      {% if client.notes %}
+        <div class="detail-row">
+          <span>Notes</span>
+          <strong>{{ client.notes }}</strong>
+        </div>
+      {% endif %}
+
+    </div>
+
+  </div>
+
+
+  <div class="card">
+
+    <div class="card-header">
+      <div>
+        <h2>Employees</h2>
+        <p>Employees who have recorded expenses for this client.</p>
+      </div>
+    </div>
+
+    {% if employees %}
+
+      <div class="employee-list">
+
+        {% for employee in employees %}
+
+          <div class="employee-row">
+
+            <div class="employee-avatar">
+              {{ employee.user__username|first|upper }}
+            </div>
+
+            <div class="employee-info">
+
+              <strong>
+                {% if employee.user__first_name or employee.user__last_name %}
+                  {{ employee.user__first_name }}
+                  {{ employee.user__last_name }}
+                {% else %}
+                  {{ employee.user__username }}
+                {% endif %}
+              </strong>
+
+              <small>
+                @{{ employee.user__username }}
+              </small>
+
+            </div>
+
+          </div>
+
+        {% endfor %}
+
+      </div>
+
+    {% else %}
+
+      <p class="empty-text">
+        No employee expenses have been recorded for this client yet.
+      </p>
+
+    {% endif %}
+
+  </div>
+
+</div>
+
+
+<div class="card">
+
+  <div class="card-header">
+
+    <div>
+      <h2>Expenses</h2>
+      <p>All expenses recorded against {{ client.name }}.</p>
+    </div>
+
+  </div>
+
+  {% if expenses %}
+
+    <div class="table-wrap">
+
+      <table>
+
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Employee</th>
+            <th>Expense</th>
+            <th>Category</th>
+            <th>Payment</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
+
+        <tbody>
+
+          {% for expense in expenses %}
+
+            <tr>
+
+              <td>{{ expense.date }}</td>
+
+              <td>
+                {{ expense.user.username }}
+              </td>
+
+              <td>
+                <strong>{{ expense.title }}</strong>
+
+                {% if expense.notes %}
+                  <small>
+                    {{ expense.notes }}
+                  </small>
+                {% endif %}
+              </td>
+
+              <td>
+                {% if expense.category %}
+                  {{ expense.category.name }}
+                {% else %}
+                  Uncategorized
+                {% endif %}
+              </td>
+
+              <td>
+                {{ expense.get_payment_method_display }}
+              </td>
+
+              <td>
+                <strong>₹{{ expense.amount|floatformat:2 }}</strong>
+              </td>
+
+            </tr>
+
+          {% endfor %}
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  {% else %}
+
+    <div class="empty-state">
+
+      <div class="empty-state-icon">
+        ₹
+      </div>
+
+      <h2>No expenses yet</h2>
+
+      <p>
+        No expenses have been recorded for this client.
+      </p>
+
+      <a
+        href="{% url 'expense_form' %}"
+        class="btn btn-primary"
+      >
+        + Add Expense
+      </a>
+
+    </div>
+
+  {% endif %}
+
+</div>
+
+{% endblock %}

@@ -64,6 +64,11 @@
           <span class="nav-icon">◈</span>
           <span>Categories</span>
         </a>
+
+        <a href="{% url 'clients' %}" {% if active_page == 'clients' %}class="active"{% endif %}>
+          <span class="nav-icon">♙</span>
+          <span>Clients</span>
+        </a>
       </div>
 
       <div class="nav-section">

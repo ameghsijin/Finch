@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+
+{% block title %}
+  {% if client %}Edit Client{% else %}Add Client{% endif %} · Finch
+{% endblock %}
+
+{% block content %}
+<div class="page-shell">
+
+  <div class="page-intro">
+    <div class="page-intro-copy">
+      <p class="eyebrow">Business</p>
+
+      <h1>
+        {% if client %}Edit client{% else %}Add client{% endif %}
+      </h1>
+
+      <p>
+        {% if client %}
+          Update the details of this client.
+        {% else %}
+          Add a client to start tracking employee expenses against them.
+        {% endif %}
+      </p>
+    </div>
+  </div>
+
+
+  <div class="panel form-card">
+
+    <div class="form-card-header">
+      <h2>Client details</h2>
+      <p>
+        Add the information you use to identify and manage this client.
+      </p>
+    </div>
+
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger">
+          {{ form.non_field_errors }}
+        </div>
+      {% endif %}
+
+
+      <div class="form-section">
+
+        <div class="form-section-title">
+          Basic information
+        </div>
+
+        <div class="form-grid">
+
+          <div class="form-field full">
+            <label for="{{ form.name.id_for_label }}">
+              Client name <span class="field-required">*</span>
+            </label>
+
+            {{ form.name }}
+
+            {% if form.name.errors %}
+              <div class="field-error">{{ form.name.errors }}</div>
+            {% endif %}
+          </div>
+
+
+          <div class="form-field full">
+            <label for="{{ form.contact_person.id_for_label }}">
+              Contact person
+            </label>
+
+            {{ form.contact_person }}
+
+            {% if form.contact_person.errors %}
+              <div class="field-error">{{ form.contact_person.errors }}</div>
+            {% endif %}
+          </div>
+
+
+          <div class="form-field">
+            <label for="{{ form.email.id_for_label }}">
+              Email
+            </label>
+
+            {{ form.email }}
+
+            {% if form.email.errors %}
+              <div class="field-error">{{ form.email.errors }}</div>
+            {% endif %}
+          </div>
+
+
+          <div class="form-field">
+            <label for="{{ form.phone.id_for_label }}">
+              Phone
+            </label>
+
+            {{ form.phone }}
+
+            {% if form.phone.errors %}
+              <div class="field-error">{{ form.phone.errors }}</div>
+            {% endif %}
+          </div>
+
+        </div>
+      </div>
+
+
+      <div class="form-section">
+
+        <div class="form-section-title">
+          Additional information
+        </div>
+
+        <div class="form-grid">
+
+          <div class="form-field full">
+            <label for="{{ form.address.id_for_label }}">
+              Address
+            </label>
+
+            {{ form.address }}
+
+            {% if form.address.errors %}
+              <div class="field-error">{{ form.address.errors }}</div>
+            {% endif %}
+          </div>
+
+
+          <div class="form-field full">
+            <label for="{{ form.notes.id_for_label }}">
+              Notes
+            </label>
+
+            {{ form.notes }}
+
+            <small class="field-help">
+              Optional. Add anything useful about this client.
+            </small>
+
+            {% if form.notes.errors %}
+              <div class="field-error">{{ form.notes.errors }}</div>
+            {% endif %}
+          </div>
+
+
+          {% if client %}
+            <div class="form-field full">
+              <label for="{{ form.is_active.id_for_label }}">
+                Status
+              </label>
+
+              <label class="checkbox-label">
+                {{ form.is_active }}
+                <span>Client is active</span>
+              </label>
+
+              {% if form.is_active.errors %}
+                <div class="field-error">{{ form.is_active.errors }}</div>
+              {% endif %}
+            </div>
+          {% endif %}
+
+        </div>
+      </div>
+
+
+      <div class="form-actions">
+
+        <a href="{% url 'clients' %}" class="btn btn-ghost">
+          Cancel
+        </a>
+
+        <button type="submit" class="btn btn-primary">
+          {% if client %}
+            Save changes
+          {% else %}
+            Save client
+          {% endif %}
+        </button>
+
+      </div>
+
+    </form>
+
+  </div>
+
+</div>
+{% endblock %}

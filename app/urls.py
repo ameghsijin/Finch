@@ -1,8 +1,10 @@
 from django.urls import path
+
 from .views import health_check
 from . import views
 
 urlpatterns = [
+
     path("", views.index, name="index"),
 
     # Expenses
@@ -31,6 +33,12 @@ urlpatterns = [
     path("category-form/", views.category_form, name="category_form"),
     path("category-form/<int:pk>/", views.category_form, name="category_edit"),
     path("category-delete/<int:pk>/", views.category_delete, name="category_delete"),
+
+    # Clients
+    path("clients/", views.clients, name="clients"),
+    path("client-form/", views.client_form, name="client_form"),
+    path("client-form/<int:pk>/", views.client_form, name="client_edit"),
+    path("client/<int:pk>/", views.client_detail, name="client_detail"),
 
     # Reports
     path("reports/", views.reports, name="reports"),

@@ -25,6 +25,21 @@ class Category(models.Model):
     def __str__(self):
         return f'{self.name} ({self.get_type_display()})'
 
+class Client(models.Model):
+    name = models.CharField(max_length=200)
+    contact_person = models.CharField(max_length=200, blank=True)
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=50, blank=True)
+    address = models.TextField(blank=True)
+    notes = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
 
 class Expense(models.Model):
     PAYMENT_CHOICES = [
@@ -34,7 +49,13 @@ class Expense(models.Model):
         ('Bank Transfer', 'Bank Transfer'),
         ('Other', 'Other'),
     ]
-
+    client = models.ForeignKey(
+        Client,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='expenses',
+    )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -120,18 +141,6 @@ class Budget(models.Model):
         return f'{self.category} · {self.period} {self.year}'
 
 class TwoFactorCode(models.Model):
-    """
-    Stores 2FA OTP codes in the database instead of in-process memory.
-
-    A plain in-memory dict only exists inside a single process. Render
-    (and most production hosts) run the web service as several gunicorn
-    worker processes behind one URL, so the worker that generated a code
-    is very often not the same worker that handles the verification
-    request a few seconds later - that worker's dict never had the code,
-    so verification always failed with "No OTP found" / "Invalid OTP".
-    Storing codes in the database makes them visible to every worker
-    process and durable across restarts/deploys.
-    """
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
