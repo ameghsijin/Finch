@@ -50,16 +50,6 @@
           <span>Expenses</span>
         </a>
 
-        <a href="{% url 'income' %}" {% if active_page == 'income' %}class="active"{% endif %}>
-          <span class="nav-icon">+</span>
-          <span>Income</span>
-        </a>
-
-        <a href="{% url 'budgets' %}" {% if active_page == 'budgets' %}class="active"{% endif %}>
-          <span class="nav-icon">◒</span>
-          <span>Budgets</span>
-        </a>
-
         <a href="{% url 'categories' %}" {% if active_page == 'categories' %}class="active"{% endif %}>
           <span class="nav-icon">◈</span>
           <span>Categories</span>

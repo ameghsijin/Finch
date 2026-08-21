@@ -4,247 +4,780 @@
 {% block title %}Reports · Finch{% endblock %}
 
 {% block content %}
+
 <div class="page-shell">
 
   <div class="page-intro">
+
     <div class="page-intro-copy">
       <p class="eyebrow">Insights</p>
       <h1>Reports</h1>
-      <p>See the bigger picture behind your money.</p>
+      <p>
+        Analyze expenses across employees, clients and categories.
+      </p>
     </div>
+
   </div>
 
 
-  <form method="get" class="page-filter panel report-filter">
+  <!-- FILTERS -->
+
+  <form
+    method="get"
+    class="page-filter panel report-filter"
+  >
 
     <div class="filter-field">
       <label for="year">Year</label>
-      <select name="year" id="year" class="form-control">
+
+      <select
+        name="year"
+        id="year"
+        class="form-control"
+      >
         {% for y in years %}
-          <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <div class="filter-field">
-      <label for="month">Month</label>
-      <select name="month" id="month" class="form-control">
-        <option value="" {% if not month %}selected{% endif %}>Full year</option>
-
-        {% for number, name in months %}
-          <option value="{{ number }}" {% if number == month %}selected{% endif %}>
-            {{ name }}
+          <option
+            value="{{ y }}"
+            {% if y == year %}selected{% endif %}
+          >
+            {{ y }}
           </option>
         {% endfor %}
       </select>
     </div>
 
-    <button type="submit" class="btn btn-secondary">Update report</button>
+
+    <div class="filter-field">
+      <label for="month">Month</label>
+
+      <select
+        name="month"
+        id="month"
+        class="form-control"
+      >
+
+        <option
+          value=""
+          {% if not month %}selected{% endif %}
+        >
+          Full year
+        </option>
+
+        {% for number, name in months %}
+          <option
+            value="{{ number }}"
+            {% if number == month %}selected{% endif %}
+          >
+            {{ name }}
+          </option>
+        {% endfor %}
+
+      </select>
+    </div>
+
+
+    <div class="filter-field">
+      <label for="employee">Employee</label>
+
+      <select
+        name="employee"
+        id="employee"
+        class="form-control"
+      >
+
+        <option
+          value=""
+          {% if not employee %}selected{% endif %}
+        >
+          All employees
+        </option>
+
+        {% for item in employees %}
+
+          <option
+            value="{{ item.pk }}"
+            {% if item.pk == employee %}selected{% endif %}
+          >
+
+            {% if item.first_name or item.last_name %}
+              {{ item.first_name }} {{ item.last_name }}
+            {% else %}
+              {{ item.username }}
+            {% endif %}
+
+          </option>
+
+        {% endfor %}
+
+      </select>
+    </div>
+
+
+    <div class="filter-field">
+      <label for="client">Client</label>
+
+      <select
+        name="client"
+        id="client"
+        class="form-control"
+      >
+
+        <option
+          value=""
+          {% if not client %}selected{% endif %}
+        >
+          All clients
+        </option>
+
+        {% for item in clients %}
+
+          <option
+            value="{{ item.pk }}"
+            {% if item.pk == client %}selected{% endif %}
+          >
+            {{ item.name }}
+          </option>
+
+        {% endfor %}
+
+      </select>
+    </div>
+
+
+    <div class="filter-field">
+      <label for="category">Expense Category</label>
+
+      <select
+        name="category"
+        id="category"
+        class="form-control"
+      >
+
+        <option
+          value=""
+          {% if not category %}selected{% endif %}
+        >
+          All categories
+        </option>
+
+        {% for item in categories %}
+
+          <option
+            value="{{ item.pk }}"
+            {% if item.pk == category %}selected{% endif %}
+          >
+            {{ item.name }}
+          </option>
+
+        {% endfor %}
+
+      </select>
+    </div>
+
+
+    <div class="filter-field">
+      <label for="payment">Payment Method</label>
+
+      <select
+        name="payment"
+        id="payment"
+        class="form-control"
+      >
+
+        <option
+          value=""
+          {% if not payment %}selected{% endif %}
+        >
+          All methods
+        </option>
+
+        {% for value, label in payment_choices %}
+
+          <option
+            value="{{ value }}"
+            {% if payment == value %}selected{% endif %}
+          >
+            {{ label }}
+          </option>
+
+        {% endfor %}
+
+      </select>
+    </div>
+
+
+    <button
+      type="submit"
+      class="btn btn-secondary"
+    >
+      Update report
+    </button>
+
+
+    {% if filters_active %}
+
+      <a
+        href="{% url 'reports' %}"
+        class="btn btn-ghost"
+      >
+        Clear
+      </a>
+
+    {% endif %}
+
   </form>
 
 
+  <!-- SUMMARY -->
+
   <div class="summary-strip report-summary">
-    <div class="summary-item">
-      <span class="summary-item-label">Income</span>
-      <strong class="summary-item-value income">₹{{ income_total|floatformat:2 }}</strong>
-    </div>
 
     <div class="summary-item">
-      <span class="summary-item-label">Expenses</span>
-      <strong class="summary-item-value expense">₹{{ expense_total|floatformat:2 }}</strong>
+      <span class="summary-item-label">
+        Expenses
+      </span>
+
+      <strong class="summary-item-value expense">
+        ₹{{ expense_total|floatformat:2 }}
+      </strong>
     </div>
 
+
     <div class="summary-item">
-      <span class="summary-item-label">Net</span>
-      <strong class="summary-item-value {% if net < 0 %}expense{% else %}brand{% endif %}">
+      <span class="summary-item-label">
+        Client spend
+      </span>
+
+      <strong class="summary-item-value expense">
+        ₹{{ client_total|floatformat:2 }}
+      </strong>
+    </div>
+
+
+    <div class="summary-item">
+      <span class="summary-item-label">
+        Net
+      </span>
+
+      <strong
+        class="summary-item-value
+        {% if net < 0 %}expense{% else %}brand{% endif %}"
+      >
         ₹{{ net|floatformat:2 }}
       </strong>
     </div>
+
   </div>
 
+
+  <!-- CHARTS -->
 
   <div class="report-grid">
 
     <article class="report-card">
+
       <h2>{{ trend_title }}</h2>
-      <p>Your spending trend for the selected period.</p>
+
+      <p>
+        Spending based on the selected filters.
+      </p>
+
       <div class="report-chart">
         <canvas id="dailyChart"></canvas>
       </div>
+
     </article>
 
+
     <article class="report-card">
+
       <h2>Category breakdown</h2>
-      <p>How your spending is distributed.</p>
+
+      <p>
+        Expense distribution by category.
+      </p>
+
       <div class="report-chart">
         <canvas id="reportCatChart"></canvas>
       </div>
+
     </article>
 
   </div>
 
 
+  <!-- TABLES -->
+
   <div class="report-tables">
 
+
+    <!-- EMPLOYEE -->
+
     <article class="dashboard-card report-table-card">
+
       <div class="data-panel-head">
+
         <div>
-          <h2>By category</h2>
-          <p>Your biggest spending categories.</p>
+          <h2>By employee</h2>
+          <p>
+            Which employees are recording the most expenses.
+          </p>
         </div>
+
       </div>
 
+
       <div class="table-wrap">
+
         <table class="fin-table">
+
           <thead>
+
             <tr>
-              <th>Category</th>
+              <th>Employee</th>
+              <th>Expenses</th>
               <th>Amount</th>
             </tr>
+
           </thead>
 
+
           <tbody>
-            {% for row in category_rows %}
+
+            {% for row in employee_rows %}
+
               <tr>
+
                 <td>
-                  <span class="category-pill">
-                    <span
-                      class="category-pill-dot"
-                      style="background:{{ row.color }}"
-                    ></span>
-                    {{ row.name }}
-                  </span>
+
+                  {% if row.user__first_name or row.user__last_name %}
+
+                    {{ row.user__first_name }}
+                    {{ row.user__last_name }}
+
+                  {% else %}
+
+                    {{ row.user__username }}
+
+                  {% endif %}
+
+                </td>
+
+                <td>
+                  {{ row.count }}
                 </td>
 
                 <td class="amount expense">
                   ₹{{ row.total|floatformat:2 }}
                 </td>
+
               </tr>
 
             {% empty %}
+
               <tr>
-                <td colspan="2" class="table-empty">No expenses found for this period.</td>
+                <td
+                  colspan="3"
+                  class="table-empty"
+                >
+                  No employee expense data found.
+                </td>
               </tr>
+
             {% endfor %}
+
           </tbody>
+
         </table>
+
       </div>
+
     </article>
 
 
+    <!-- CLIENT -->
+
     <article class="dashboard-card report-table-card">
+
       <div class="data-panel-head">
+
         <div>
-          <h2>By payment method</h2>
-          <p>Where your spending is being paid from.</p>
+          <h2>By client</h2>
+          <p>
+            Which clients are driving expenses.
+          </p>
         </div>
+
       </div>
 
+
       <div class="table-wrap">
+
         <table class="fin-table">
+
           <thead>
+
             <tr>
-              <th>Method</th>
+              <th>Client</th>
+              <th>Expenses</th>
               <th>Amount</th>
             </tr>
+
           </thead>
 
+
           <tbody>
-            {% for row in payment_rows %}
+
+            {% for row in client_rows %}
+
               <tr>
-                <td>{{ row.payment_method|default:"Unknown"|title }}</td>
-                <td class="amount expense">₹{{ row.total|floatformat:2 }}</td>
+
+                <td>
+                  {{ row.client__name|default:"Unassigned" }}
+                </td>
+
+                <td>
+                  {{ row.count }}
+                </td>
+
+                <td class="amount expense">
+                  ₹{{ row.total|floatformat:2 }}
+                </td>
+
               </tr>
 
             {% empty %}
+
               <tr>
-                <td colspan="2" class="table-empty">No payments found for this period.</td>
+                <td
+                  colspan="3"
+                  class="table-empty"
+                >
+                  No client expense data found.
+                </td>
               </tr>
+
             {% endfor %}
+
           </tbody>
+
         </table>
+
       </div>
+
+    </article>
+
+
+    <!-- CATEGORY -->
+
+    <article class="dashboard-card report-table-card">
+
+      <div class="data-panel-head">
+
+        <div>
+          <h2>By category</h2>
+          <p>
+            Your biggest expense categories.
+          </p>
+        </div>
+
+      </div>
+
+
+      <div class="table-wrap">
+
+        <table class="fin-table">
+
+          <thead>
+
+            <tr>
+              <th>Category</th>
+              <th>Expenses</th>
+              <th>Amount</th>
+            </tr>
+
+          </thead>
+
+
+          <tbody>
+
+            {% for row in category_rows %}
+
+              <tr>
+
+                <td>
+
+                  <span class="category-pill">
+
+                    <span
+                      class="category-pill-dot"
+                      style="background:{{ row.color }}"
+                    ></span>
+
+                    {{ row.name }}
+
+                  </span>
+
+                </td>
+
+                <td>
+                  {{ row.count }}
+                </td>
+
+                <td class="amount expense">
+                  ₹{{ row.total|floatformat:2 }}
+                </td>
+
+              </tr>
+
+            {% empty %}
+
+              <tr>
+                <td
+                  colspan="3"
+                  class="table-empty"
+                >
+                  No category data found.
+                </td>
+              </tr>
+
+            {% endfor %}
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </article>
+
+
+    <!-- PAYMENT -->
+
+    <article class="dashboard-card report-table-card">
+
+      <div class="data-panel-head">
+
+        <div>
+          <h2>By payment method</h2>
+          <p>
+            How expenses are being paid.
+          </p>
+        </div>
+
+      </div>
+
+
+      <div class="table-wrap">
+
+        <table class="fin-table">
+
+          <thead>
+
+            <tr>
+              <th>Payment method</th>
+              <th>Expenses</th>
+              <th>Amount</th>
+            </tr>
+
+          </thead>
+
+
+          <tbody>
+
+            {% for row in payment_rows %}
+
+              <tr>
+
+                <td>
+                  {{ row.payment_method|default:"Unknown"|title }}
+                </td>
+
+                <td>
+                  {{ row.count }}
+                </td>
+
+                <td class="amount expense">
+                  ₹{{ row.total|floatformat:2 }}
+                </td>
+
+              </tr>
+
+            {% empty %}
+
+              <tr>
+                <td
+                  colspan="3"
+                  class="table-empty"
+                >
+                  No payment data found.
+                </td>
+              </tr>
+
+            {% endfor %}
+
+          </tbody>
+
+        </table>
+
+      </div>
+
     </article>
 
   </div>
 
 </div>
+
 {% endblock %}
 
 
 {% block extra_scripts %}
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
 <script>
-document.addEventListener("DOMContentLoaded", () => {
-  const daily = document.getElementById("dailyChart");
-  const category = document.getElementById("reportCatChart");
 
-  if (daily) {
-    new Chart(daily, {
-      type:"line",
-      data:{
-        labels:{{ trend_labels|safe }},
-        datasets:[{
-          label:"Spending",
-          data:{{ trend_values|safe }},
-          borderColor:"#0f766e",
-          backgroundColor:"rgba(15,118,110,.08)",
-          fill:true,
-          tension:.35,
-          pointRadius:2,
-          pointHoverRadius:5
-        }]
-      },
-      options:{
-        responsive:true,
-        maintainAspectRatio:false,
-        interaction:{intersect:false,mode:"index"},
-        scales:{
-          x:{
-            grid:{display:false},
-            ticks:{color:"#7a8982"}
+document.addEventListener(
+  "DOMContentLoaded",
+  () => {
+
+    const daily =
+      document.getElementById(
+        "dailyChart"
+      );
+
+    const category =
+      document.getElementById(
+        "reportCatChart"
+      );
+
+
+    if (daily) {
+
+      new Chart(
+        daily,
+        {
+          type: "line",
+
+          data: {
+            labels: {{ trend_labels|safe }},
+
+            datasets: [{
+              label: "Spending",
+
+              data: {{ trend_values|safe }},
+
+              borderColor: "#0f766e",
+
+              backgroundColor:
+                "rgba(15,118,110,.08)",
+
+              fill: true,
+
+              tension: .35,
+
+              pointRadius: 2,
+
+              pointHoverRadius: 5
+            }]
           },
-          y:{
-            beginAtZero:true,
-            grid:{color:"#edf1ef"},
-            ticks:{color:"#7a8982"}
-          }
-        },
-        plugins:{legend:{display:false}}
-      }
-    });
-  }
 
-  if (category) {
-    new Chart(category, {
-      type:"doughnut",
-      data:{
-        labels:{{ cat_labels|safe }},
-        datasets:[{
-          data:{{ cat_values|safe }},
-          backgroundColor:{{ cat_colors|safe }},
-          borderWidth:0,
-          hoverOffset:5
-        }]
-      },
-      options:{
-        responsive:true,
-        maintainAspectRatio:false,
-        cutout:"65%",
-        plugins:{
-          legend:{
-            position:"bottom",
-            labels:{
-              usePointStyle:true,
-              padding:16,
-              color:"#5c6b64"
+          options: {
+
+            responsive: true,
+
+            maintainAspectRatio: false,
+
+            interaction: {
+              intersect: false,
+              mode: "index"
+            },
+
+            scales: {
+
+              x: {
+                grid: {
+                  display: false
+                }
+              },
+
+              y: {
+                beginAtZero: true
+              }
+
+            },
+
+            plugins: {
+              legend: {
+                display: false
+              }
             }
+
           }
         }
-      }
-    });
+      );
+
+    }
+
+
+    if (category) {
+
+      new Chart(
+        category,
+        {
+          type: "doughnut",
+
+          data: {
+
+            labels: {{ cat_labels|safe }},
+
+            datasets: [{
+
+              data: {{ cat_values|safe }},
+
+              backgroundColor:
+                {{ cat_colors|safe }},
+
+              borderWidth: 0,
+
+              hoverOffset: 5
+
+            }]
+
+          },
+
+          options: {
+
+            responsive: true,
+
+            maintainAspectRatio: false,
+
+            cutout: "65%",
+
+            plugins: {
+
+              legend: {
+
+                position: "bottom",
+
+                labels: {
+                  usePointStyle: true,
+                  padding: 16
+                }
+
+              }
+
+            }
+
+          }
+        }
+      );
+
+    }
+
   }
-});
+);
+
 </script>
+
 {% endblock %}

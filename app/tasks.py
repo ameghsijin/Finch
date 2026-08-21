@@ -11,7 +11,7 @@ from django.db.models import Sum
 from django.utils import timezone
 from groq import Groq
 
-from .models import Expense, Income, Category
+from .models import Expense, Category
 
 logger = logging.getLogger(__name__)
 

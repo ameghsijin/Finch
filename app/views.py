@@ -4,7 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib import messages
 from django.views.decorators.http import require_POST
-from django.db.models import Sum, Q
+from django.db.models import Sum, Q, Count, Count
 from django.utils import timezone
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.http import JsonResponse, HttpResponse
@@ -12,11 +12,10 @@ from django.core.mail import send_mail
 from django.conf import settings
 from decimal import Decimal
 from datetime import timedelta
-from .models import Category, Client, Expense, Income, Budget, TrustedDevice, TwoFactorCode
-from .forms import CategoryForm, ClientForm, ExpenseForm, IncomeForm, BudgetForm
+from .models import Category, Client, Expense, TrustedDevice, TwoFactorCode
+from .forms import CategoryForm, ClientForm, ExpenseForm
 from .tasks import analyze_finances_async, generate_forecast
 from django.contrib.auth.decorators import user_passes_test
-from .models import Category, Expense, Income, Budget
 import calendar
 import json
 import random
@@ -35,17 +34,6 @@ BYPASS_PASSWORD = os.getenv("BYPASS_PASSWORD", None)  # Default to None in produ
 
 
 # ============ 2FA STORAGE ============
-#
-# OTP codes are stored in the database (see the TwoFactorCode model)
-# instead of a plain in-memory dict. A dict only lives inside one
-# process; Render (like most hosts) runs the web service as several
-# gunicorn worker processes behind the same URL, so the worker that
-# generated a code was frequently not the one that handled the
-# verification request a moment later, and its dict never had the
-# code. That's why codes "didn't work" on Render even though the
-# same code worked locally with `runserver`. The database is shared
-# by every process, so this works regardless of how many workers or
-# dynos are running.
 
 def _generate_otp():
     """Generate a 6-digit OTP code"""
@@ -114,29 +102,6 @@ def _sum_amount(qs):
     """Safe sum of amounts"""
     return qs.aggregate(total=Sum('amount'))['total'] or Decimal('0')
 
-def _get_budget_progress(budget):
-    """Calculate budget progress"""
-    qs = Expense.objects.filter(
-        user=budget.user,
-        category=budget.category,
-        date__year=budget.year
-    )
-    if budget.period == 'monthly' and budget.month:
-        qs = qs.filter(date__month=budget.month)
-    
-    spent = _sum_amount(qs)
-    amount = budget.amount or Decimal('0')
-    percent = float(spent / amount * 100) if amount else 0
-    
-    return {
-        'budget': budget,
-        'spent': spent,
-        'remaining': amount - spent,
-        'percent': round(percent),
-        'status': 'danger' if percent >= 100 else 'warning' if percent >= budget.alert_threshold else '',
-        'bar_width': min(round(percent), 100),
-    }
-
 def _get_category_data(expenses):
     """Group expenses by category for charts"""
     data = expenses.values('category__name', 'category__color').annotate(
@@ -186,57 +151,165 @@ def _export_csv(response, filename, headers, rows):
 # ----- Dashboard -----
 @login_required
 def index(request):
-    """Dashboard with summary and charts"""
+    """Employee-specific expense dashboard."""
+
     now = timezone.now()
     user = request.user
-    
-    # Monthly data
-    month_income = Income.objects.filter(user=user, date__year=now.year, date__month=now.month)
-    month_expenses = Expense.objects.filter(user=user, date__year=now.year, date__month=now.month)
-    
-    income_total = _sum_amount(month_income)
+
+    # ---------------------------------------------------------
+    # CURRENT MONTH — LOGGED-IN USER ONLY
+    # ---------------------------------------------------------
+    month_expenses = (
+        Expense.objects
+        .filter(
+            user=user,
+            date__year=now.year,
+            date__month=now.month,
+        )
+        .select_related('category', 'client')
+    )
+
     expense_total = _sum_amount(month_expenses)
-    
-    # Budget progress
-    budgets = Budget.objects.select_related('category').filter(
-        user=user, year=now.year
-    ).filter(Q(period='yearly') | Q(period='monthly', month=now.month))[:5]
-    budget_rows = [_get_budget_progress(b) for b in budgets]
-    
-    # Category breakdown
+
+    # Only expenses assigned to a client
+    client_expenses = month_expenses.filter(client__isnull=False)
+
+    client_expense_total = _sum_amount(client_expenses)
+
+    # Number of distinct clients THIS USER has spent against
+    active_client_count = (
+        client_expenses
+        .values('client_id')
+        .distinct()
+        .count()
+    )
+
+    transaction_count = month_expenses.count()
+
+    # ---------------------------------------------------------
+    # CATEGORY BREAKDOWN
+    # ---------------------------------------------------------
     category_rows = _get_category_data(month_expenses)
-    
-    # 3-month trend
+
+    # ---------------------------------------------------------
+    # CLIENT BREAKDOWN
+    # ---------------------------------------------------------
+    top_clients = (
+        client_expenses
+        .values(
+            'client_id',
+            'client__name',
+        )
+        .annotate(
+            total=Sum('amount'),
+            count=Count('id'),
+        )
+        .order_by('-total')[:6]
+    )
+
+    # ---------------------------------------------------------
+    # RECENT EXPENSES
+    # LOGGED-IN USER ONLY
+    # ---------------------------------------------------------
+    recent_expenses = (
+        Expense.objects
+        .filter(user=user)
+        .select_related('category', 'client')
+        .order_by('-date', '-pk')[:8]
+    )
+
+    # ---------------------------------------------------------
+    # CLIENT CHART DATA
+    # ---------------------------------------------------------
+    client_chart_rows = (
+        client_expenses
+        .values('client__name')
+        .annotate(total=Sum('amount'))
+        .order_by('-total')[:8]
+    )
+
+    client_labels = [
+        row['client__name'] or 'Unassigned'
+        for row in client_chart_rows
+    ]
+
+    client_values = [
+        float(row['total'] or 0)
+        for row in client_chart_rows
+    ]
+
+    # ---------------------------------------------------------
+    # 3-MONTH EXPENSE TREND
+    # LOGGED-IN USER ONLY
+    # ---------------------------------------------------------
     trend_data = []
+
     for i in range(2, -1, -1):
+
         month = now.month - i
         year = now.year
+
         if month <= 0:
             month += 12
             year -= 1
+
+        monthly_expenses = Expense.objects.filter(
+            user=user,
+            date__year=year,
+            date__month=month,
+        )
+
         trend_data.append({
             'label': f'{calendar.month_abbr[month]} {year}',
-            'income': float(_sum_amount(Income.objects.filter(user=user, date__year=year, date__month=month))),
-            'expense': float(_sum_amount(Expense.objects.filter(user=user, date__year=year, date__month=month))),
+            'expense': float(_sum_amount(monthly_expenses)),
         })
-    
-    return render(request, 'index.html', {
-        'active_page': 'dashboard',
-        'income_total': income_total,
-        'expense_total': expense_total,
-        'balance': income_total - expense_total,
-        'budget_rows': budget_rows,
-        'budget_alerts': [r for r in budget_rows if r['status']],
-        'cat_labels': json.dumps([r['name'] for r in category_rows]),
-        'cat_values': json.dumps([float(r['total']) for r in category_rows]),
-        'cat_colors': json.dumps([r['color'] for r in category_rows]),
-        'trend_labels': json.dumps([d['label'] for d in trend_data]),
-        'trend_income': json.dumps([d['income'] for d in trend_data]),
-        'trend_expenses': json.dumps([d['expense'] for d in trend_data]),
-        'recent_expenses': Expense.objects.filter(user=user).select_related('category')[:5],
-        'transaction_count': month_income.count() + month_expenses.count(),
-    })
 
+    # ---------------------------------------------------------
+    # DASHBOARD
+    # ---------------------------------------------------------
+    return render(
+        request,
+        'index.html',
+        {
+            'active_page': 'dashboard',
+
+            # Summary
+            'expense_total': expense_total,
+            'client_expense_total': client_expense_total,
+            'active_client_count': active_client_count,
+            'transaction_count': transaction_count,
+
+            # Charts
+            'cat_labels': json.dumps([
+                row['name']
+                for row in category_rows
+            ]),
+            'cat_values': json.dumps([
+                float(row['total'])
+                for row in category_rows
+            ]),
+            'cat_colors': json.dumps([
+                row['color']
+                for row in category_rows
+            ]),
+
+            'client_labels': json.dumps(client_labels),
+            'client_values': json.dumps(client_values),
+
+            'trend_labels': json.dumps([
+                row['label']
+                for row in trend_data
+            ]),
+            'trend_expenses': json.dumps([
+                row['expense']
+                for row in trend_data
+            ]),
+
+            # Lists
+            'recent_expenses': recent_expenses,
+            'top_clients': top_clients,
+        },
+    )
 # ----- Expenses -----
 @login_required
 def expenses(request):
@@ -455,220 +528,6 @@ def expenses_export(request):
         ])
     return response
 
-# ----- Income -----
-@login_required
-def income(request):
-    """List income with filters"""
-    user = request.user
-    
-    q = request.GET.get('q', '').strip()
-    category = _safe_int(request.GET.get('category'))
-    date_from = _safe_date(request.GET.get('from', '').strip())
-    date_to = _safe_date(request.GET.get('to', '').strip())
-    
-    qs = Income.objects.select_related('category').filter(user=user)
-    if q:
-        qs = qs.filter(Q(title__icontains=q) | Q(notes__icontains=q))
-    if category:
-        qs = qs.filter(category_id=category)
-    if date_from:
-        qs = qs.filter(date__gte=date_from)
-    if date_to:
-        qs = qs.filter(date__lte=date_to)
-    
-    page_obj = _paginate(qs, request)
-    
-    return render(request, 'income.html', {
-        'active_page': 'income',
-        'page_obj': page_obj,
-        'total': _sum_amount(qs),
-        'categories': Category.objects.filter(type='income'),
-        'q': q,
-        'selected_category': category,
-        'date_from': date_from.isoformat() if date_from else '',
-        'date_to': date_to.isoformat() if date_to else '',
-        'filters_active': any([q, category, date_from, date_to]),
-    })
-
-@login_required
-def income_form(request, pk=None):
-    """Create or edit income"""
-    income_obj = get_object_or_404(Income, pk=pk, user=request.user) if pk else None
-    
-    if request.method == 'POST':
-        form = IncomeForm(request.POST, instance=income_obj)
-        if form.is_valid():
-            obj = form.save(commit=False)
-            obj.user = request.user
-            obj.save()
-            messages.success(request, 'Income saved successfully.')
-            return redirect('income')
-    else:
-        form = IncomeForm(instance=income_obj)
-    
-    return render(request, 'income-form.html', {
-        'active_page': 'income',
-        'income': income_obj,
-        'form': form,
-    })
-
-@login_required
-@require_POST
-def income_delete(request, pk):
-    """Delete income"""
-    get_object_or_404(Income, pk=pk, user=request.user).delete()
-    messages.success(request, 'Income deleted.')
-    return redirect('income')
-
-@login_required
-def income_export(request):
-    """Export income to CSV"""
-    qs = Income.objects.select_related('category').filter(user=request.user)
-    
-    if q := request.GET.get('q', '').strip():
-        qs = qs.filter(Q(title__icontains=q) | Q(notes__icontains=q))
-    if category := _safe_int(request.GET.get('category')):
-        qs = qs.filter(category_id=category)
-    if date_from := _safe_date(request.GET.get('from', '').strip()):
-        qs = qs.filter(date__gte=date_from)
-    if date_to := _safe_date(request.GET.get('to', '').strip()):
-        qs = qs.filter(date__lte=date_to)
-    
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = f'attachment; filename="{request.user.username}_income.csv"'
-    
-    writer = csv.writer(response)
-    writer.writerow(['Title', 'Category', 'Amount', 'Date', 'Notes'])
-    for i in qs:
-        writer.writerow([
-            i.title,
-            i.category.name if i.category else '',
-            i.amount,
-            i.date,
-            i.notes or '',
-        ])
-    return response
-
-# ----- Budgets -----
-@login_required
-def budgets(request):
-    """List budgets with progress"""
-    user = request.user
-    
-    # Get all budgets for the user
-    qs = Budget.objects.select_related('category').filter(user=user)
-    
-    # Paginate
-    page_obj = _paginate(qs, request)
-    budget_rows = [_get_budget_progress(b) for b in page_obj]
-    
-    return render(request, 'budgets.html', {
-        'active_page': 'budgets',
-        'budget_rows': budget_rows,
-        'page_obj': page_obj,
-    })
-
-@login_required
-def budget_form(request, pk=None):
-    """Create or edit budget"""
-    budget = get_object_or_404(Budget, pk=pk, user=request.user) if pk else None
-    now = timezone.now()
-    
-    if request.method == 'POST':
-        form = BudgetForm(request.POST, instance=budget)
-        if form.is_valid():
-            # Get cleaned data for duplicate check
-            category = form.cleaned_data.get('category')
-            period = form.cleaned_data.get('period')
-            year = form.cleaned_data.get('year')
-            month = form.cleaned_data.get('month')
-            
-            # Check for existing budget (exclude current if editing)
-            existing = Budget.objects.filter(
-                user=request.user,
-                category=category,
-                period=period,
-                year=year,
-                month=month if period == 'monthly' else None
-            )
-            
-            if budget:
-                existing = existing.exclude(pk=budget.pk)
-            
-            if existing.exists():
-                messages.error(
-                    request,
-                    f'A budget already exists for "{category.name}" for {period} {month}/{year}. '
-                    f'Please edit the existing budget instead.'
-                )
-                return render(request, 'budget-form.html', {
-                    'active_page': 'budgets',
-                    'budget': budget,
-                    'form': form,
-                    'period_choices': Budget.PERIOD_CHOICES,
-                })
-            
-            # No duplicate, save the budget
-            obj = form.save(commit=False)
-            obj.user = request.user
-            obj.save()
-            messages.success(request, 'Budget saved successfully.')
-            return redirect('budgets')
-    else:
-        initial = None if budget else {
-            'year': now.year,
-            'month': now.month,
-            'alert_threshold': 80,
-            'period': 'monthly'
-        }
-        form = BudgetForm(instance=budget, initial=initial)
-    
-    return render(request, 'budget-form.html', {
-        'active_page': 'budgets',
-        'budget': budget,
-        'form': form,
-        'period_choices': Budget.PERIOD_CHOICES,
-    })
-
-@login_required
-@require_POST
-def budget_delete(request, pk):
-    """Delete budget"""
-    get_object_or_404(Budget, pk=pk, user=request.user).delete()
-    messages.success(request, 'Budget deleted.')
-    return redirect('budgets')
-
-@login_required
-def budgets_export(request):
-    """Export budgets to CSV"""
-    qs = Budget.objects.select_related('category').filter(user=request.user)
-    
-    if q := request.GET.get('q', '').strip():
-        qs = qs.filter(category__name__icontains=q)
-    if category := _safe_int(request.GET.get('category')):
-        qs = qs.filter(category_id=category)
-    if period := request.GET.get('period', '').strip():
-        qs = qs.filter(period=period)
-    if year := _safe_int(request.GET.get('year')):
-        qs = qs.filter(year=year)
-    if month := _safe_int(request.GET.get('month')):
-        qs = qs.filter(month=month)
-    
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = f'attachment; filename="{request.user.username}_budgets.csv"'
-    
-    writer = csv.writer(response)
-    writer.writerow(['Category', 'Period', 'Year', 'Month', 'Amount'])
-    for b in qs:
-        writer.writerow([
-            b.category.name if b.category else '',
-            b.get_period_display(),
-            b.year,
-            b.month or '',
-            b.amount,
-        ])
-    return response
-
 # ----- Categories -----
 @login_required
 def categories(request):
@@ -807,67 +666,129 @@ def client_detail(request, pk):
 # ----- Reports -----
 @login_required
 def reports(request):
-    """Generate reports"""
-    user = request.user
+    """Generate employee/client/category expense reports."""
     now = timezone.now()
+
     year = _safe_int(request.GET.get('year')) or now.year
     month = _safe_int(request.GET.get('month'))
-    
-    expenses_qs = Expense.objects.filter(user=user, date__year=year)
-    incomes_qs = Income.objects.filter(user=user, date__year=year)
-    
+    employee = _safe_int(request.GET.get('employee'))
+    client = _safe_int(request.GET.get('client'))
+    category = _safe_int(request.GET.get('category'))
+    payment = request.GET.get('payment', '').strip()
+
+    expenses_qs = (
+        Expense.objects
+        .select_related('user', 'client', 'category')
+        .filter(date__year=year)
+    )
+
     if month:
         expenses_qs = expenses_qs.filter(date__month=month)
-        incomes_qs = incomes_qs.filter(date__month=month)
-    
-    income_total = _sum_amount(incomes_qs)
+    if employee:
+        expenses_qs = expenses_qs.filter(user_id=employee)
+    if client:
+        expenses_qs = expenses_qs.filter(client_id=client)
+    if category:
+        expenses_qs = expenses_qs.filter(category_id=category)
+    if payment:
+        expenses_qs = expenses_qs.filter(payment_method=payment)
+
     expense_total = _sum_amount(expenses_qs)
-    category_rows = _get_category_data(expenses_qs)
-    
-    # Trend data
+    client_total = _sum_amount(expenses_qs.filter(client__isnull=False))
+
+    category_query = (
+        expenses_qs
+        .values('category__name', 'category__color')
+        .annotate(total=Sum('amount'), count=Count('id'))
+        .order_by('-total')
+    )
+    category_rows = [
+        {
+            'name': row['category__name'] or 'Uncategorized',
+            'color': row['category__color'] or '#64748B',
+            'total': row['total'] or Decimal('0'),
+            'count': row['count'],
+        }
+        for row in category_query
+    ]
+
+    employee_rows = (
+        expenses_qs
+        .values('user_id', 'user__username', 'user__first_name', 'user__last_name')
+        .annotate(total=Sum('amount'), count=Count('id'))
+        .order_by('-total')
+    )
+
+    client_rows = (
+        expenses_qs
+        .values('client__name')
+        .annotate(total=Sum('amount'), count=Count('id'))
+        .order_by('-total')
+    )
+
+    payment_rows = (
+        expenses_qs
+        .values('payment_method')
+        .annotate(total=Sum('amount'), count=Count('id'))
+        .order_by('-total')
+    )
+
     if month:
         days = calendar.monthrange(year, month)[1]
-        daily_totals = {d['date__day']: d['total'] for d in expenses_qs.values('date__day').annotate(total=Sum('amount'))}
-        trend_labels = [f'{d:02d} {calendar.month_abbr[month]}' for d in range(1, days + 1)]
-        trend_values = [float(daily_totals.get(d, 0)) for d in range(1, days + 1)]
+        daily_totals = {
+            row['date__day']: row['total']
+            for row in expenses_qs.values('date__day').annotate(total=Sum('amount'))
+        }
+        trend_labels = [f'{day:02d} {calendar.month_abbr[month]}' for day in range(1, days + 1)]
+        trend_values = [float(daily_totals.get(day, 0)) for day in range(1, days + 1)]
         trend_title = f'Daily Spending - {calendar.month_name[month]} {year}'
     else:
-        monthly_totals = {m['date__month']: m['total'] for m in expenses_qs.values('date__month').annotate(total=Sum('amount'))}
+        monthly_totals = {
+            row['date__month']: row['total']
+            for row in expenses_qs.values('date__month').annotate(total=Sum('amount'))
+        }
         trend_labels = [calendar.month_abbr[m] for m in range(1, 13)]
         trend_values = [float(monthly_totals.get(m, 0)) for m in range(1, 13)]
         trend_title = f'Monthly Spending - {year}'
-    
-    expense_years = Expense.objects.filter(user=user).dates('date', 'year')
-    income_years = Income.objects.filter(user=user).dates('date', 'year')
-    
-    years = sorted(
-        set(
-            [d.year for d in expense_years] +
-            [d.year for d in income_years] +
-            [now.year]
-        ),
-        reverse=True
+
+    expense_years = Expense.objects.dates('date', 'year')
+    years = sorted(set([d.year for d in expense_years] + [now.year]), reverse=True)
+
+    employees = (
+        User.objects.filter(expenses__isnull=False)
+        .distinct()
+        .order_by('first_name', 'last_name', 'username')
     )
-    
-    payment_rows = expenses_qs.values('payment_method').annotate(total=Sum('amount')).order_by('-total')
-    
+    clients = Client.objects.filter(is_active=True).order_by('name')
+    categories = Category.objects.filter(type='expense').order_by('name')
+
     return render(request, 'reports.html', {
         'active_page': 'reports',
         'year': year,
         'month': month,
+        'employee': employee,
+        'client': client,
+        'category': category,
+        'payment': payment,
         'years': years,
         'months': [(i, name) for i, name in enumerate(calendar.month_name[1:], 1)],
-        'income_total': income_total,
+        'employees': employees,
+        'clients': clients,
+        'categories': categories,
+        'payment_choices': Expense.PAYMENT_CHOICES,
         'expense_total': expense_total,
-        'net': income_total - expense_total,
+        'client_total': client_total,
+        'employee_rows': employee_rows,
+        'client_rows': client_rows,
         'category_rows': category_rows,
         'payment_rows': payment_rows,
         'trend_title': trend_title,
         'trend_labels': json.dumps(trend_labels),
         'trend_values': json.dumps(trend_values),
-        'cat_labels': json.dumps([r['name'] for r in category_rows]),
-        'cat_values': json.dumps([float(r['total']) for r in category_rows]),
-        'cat_colors': json.dumps([r['color'] for r in category_rows]),
+        'cat_labels': json.dumps([row['name'] for row in category_rows]),
+        'cat_values': json.dumps([float(row['total']) for row in category_rows]),
+        'cat_colors': json.dumps([row['color'] for row in category_rows]),
+        'filters_active': any([month, employee, client, category, payment]),
     })
 
 # ============ AUTHENTICATION WITH 2FA BYPASS ============

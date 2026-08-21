@@ -1,5 +1,5 @@
 from django import forms
-from .models import Category, Client, Expense, Income, Budget
+from .models import Category, Client, Expense
 
 class CategoryForm(forms.ModelForm):
     class Meta:
@@ -34,27 +34,4 @@ class ExpenseForm(forms.ModelForm):
             'date': forms.DateInput(attrs={'type': 'date'}),
             'amount': forms.NumberInput(attrs={'step': '0.01'}),
             'notes': forms.Textarea(attrs={'rows': 3}),
-        }
-
-
-class IncomeForm(forms.ModelForm):
-    class Meta:
-        model = Income
-        fields = ['title', 'amount', 'date', 'notes', 'category']
-        widgets = {
-            'date': forms.DateInput(attrs={'type': 'date'}),
-            'amount': forms.NumberInput(attrs={'step': '0.01'}),
-            'notes': forms.Textarea(attrs={'rows': 3}),
-        }
-
-
-class BudgetForm(forms.ModelForm):
-    class Meta:
-        model = Budget
-        fields = ['amount', 'period', 'month', 'year', 'alert_threshold', 'category']
-        widgets = {
-            'amount': forms.NumberInput(attrs={'step': '0.01'}),
-            'month': forms.NumberInput(attrs={'min': '1', 'max': '12'}),
-            'year': forms.NumberInput(attrs={'min': '2000'}),
-            'alert_threshold': forms.NumberInput(attrs={'min': '0', 'max': '100'}),
         }
